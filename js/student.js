@@ -56,7 +56,7 @@ export function mountStudentView() {
         <div>
           <h1>Pick your clubs${me?.name ? `, ${esc(me.name.split(" ")[0])}` : ""} 🎒</h1>
           <p>
-            Choose <b>at least one CCA</b> and <b>at least one ECA</b>.
+            Choose <b>1–2 CCAs</b> and <b>1–2 ECAs</b>.
             You can't pick a CCA and an ECA that run on the same day.
           </p>
         </div>
@@ -80,7 +80,7 @@ export function mountStudentView() {
         <section class="pick-col">
           <div class="pick-col__head">
             <span class="type-badge type-badge--cca">CCA</span>
-            <h2>Co-curricular <span class="muted">— pick at least 1</span></h2>
+            <h2>Co-curricular <span class="muted">— pick 1 to 2</span></h2>
             <span class="count-pill" id="cca-count">0 chosen</span>
           </div>
           ${renderPickList(ccaList, selectedCca, selectedEca, takeCount, "cca")}
@@ -88,7 +88,7 @@ export function mountStudentView() {
         <section class="pick-col">
           <div class="pick-col__head">
             <span class="type-badge type-badge--eca">ECA</span>
-            <h2>Extra-curricular <span class="muted">— pick at least 1</span></h2>
+            <h2>Extra-curricular <span class="muted">— pick 1 to 2</span></h2>
             <span class="count-pill" id="eca-count">0 chosen</span>
           </div>
           ${renderPickList(ecaList, selectedCca, selectedEca, takeCount, "eca")}
@@ -157,6 +157,12 @@ export function mountStudentView() {
     if (clashDays.length) {
       status.textContent = "Fix the day clash to save.";
       saveBtn.disabled = true;
+    } else if (ccaCount > 2 || ecaCount > 2) {
+      const over = [];
+      if (ccaCount > 2) over.push("2 CCAs");
+      if (ecaCount > 2) over.push("2 ECAs");
+      status.textContent = `You can pick at most ${over.join(" and ")}.`;
+      saveBtn.disabled = true;
     } else if (ccaCount < 1 || ecaCount < 1) {
       const missing = [];
       if (ccaCount < 1) missing.push("at least 1 CCA");
@@ -179,8 +185,15 @@ export function mountStudentView() {
     const type = card.dataset.type;
     if (card.classList.contains("is-full") && !(type === "cca" ? selectedCca : selectedEca).has(id)) return;
     const set = type === "cca" ? selectedCca : selectedEca;
-    if (set.has(id)) set.delete(id);
-    else set.add(id);
+    if (set.has(id)) {
+      set.delete(id);
+    } else {
+      if (set.size >= 2) {
+        toast(`You can pick at most 2 ${type === "cca" ? "CCAs" : "ECAs"}.`, "error");
+        return;
+      }
+      set.add(id);
+    }
     updateCardStates();
     refresh();
   });
@@ -189,6 +202,9 @@ export function mountStudentView() {
     $$(".pick-card").forEach((card) => {
       const set = card.dataset.type === "cca" ? selectedCca : selectedEca;
       card.classList.toggle("is-selected", set.has(card.dataset.id));
+      // Once 2 of a type are picked, dim the remaining unselected cards so
+      // the 1–2 cap is obvious (they still show the toast if clicked).
+      card.classList.toggle("is-capped", set.size >= 2 && !set.has(card.dataset.id));
     });
   };
 

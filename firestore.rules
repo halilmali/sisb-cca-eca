@@ -53,16 +53,18 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "cca", "eca", "submittedAt", "name", "className", "email"
         ]) &&
-        // "Choose at least 1 CCA and 1 ECA" — enforced server-side whenever
-        // the choice fields change (name-only syncs are unaffected). The
-        // `is list` guards reject type-confusion writes (e.g. a string).
+        // "Choose 1 to 2 CCAs and 1 to 2 ECAs" — enforced server-side
+        // whenever the choice fields change (name-only syncs are unaffected).
+        // The `is list` guards reject type-confusion writes (e.g. a string).
         (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(["cca", "eca"]) ||
           (
             request.resource.data.cca is list &&
             request.resource.data.eca is list &&
             request.resource.data.cca.size() >= 1 &&
-            request.resource.data.eca.size() >= 1
+            request.resource.data.cca.size() <= 2 &&
+            request.resource.data.eca.size() >= 1 &&
+            request.resource.data.eca.size() <= 2
           )
         )
       );

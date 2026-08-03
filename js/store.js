@@ -420,6 +420,7 @@ export async function deleteStudent(email) {
  */
 export async function saveChoices(email, ccaIds, ecaIds) {
   const key = String(email).toLowerCase();
+  assertChoiceLimits(ccaIds, ecaIds);
   if (MODE === "demo") {
     const s = demoDb.students.find((x) => x.email === key);
     if (!s) throw new Error("You're not on the club list yet.");
@@ -576,6 +577,22 @@ export function resetDemoData() {
   localStorage.removeItem(DEMO_KEY);
   loadDemo();
   emit();
+}
+
+// ---------------------------------------------------------------------------
+// Choice-limit helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Each student must pick between 1 and 2 CCAs and 1 and 2 ECAs.
+ * Mirrors the firestore.rules check; gives users a clean message instead of
+ * a rules-denied error, and guards the demo-mode path too.
+ */
+function assertChoiceLimits(ccaIds, ecaIds) {
+  if (ccaIds.length < 1) throw new Error("Pick at least 1 CCA.");
+  if (ecaIds.length < 1) throw new Error("Pick at least 1 ECA.");
+  if (ccaIds.length > 2) throw new Error("You can pick at most 2 CCAs.");
+  if (ecaIds.length > 2) throw new Error("You can pick at most 2 ECAs.");
 }
 
 // ---------------------------------------------------------------------------

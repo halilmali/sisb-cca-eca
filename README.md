@@ -3,7 +3,7 @@
 A simple, self-hosted club choice portal for schools. Built with plain **HTML, CSS & JavaScript**
 (no build tools) and **Firebase** (Auth + Firestore).
 
-- **Students** sign in with their Google account and pick **at least one CCA and one ECA**.
+- **Students** sign in with their Google account and pick **1–2 CCAs and 1–2 ECAs**.
 - The system **blocks any CCA/ECA pair that runs on the same day** (day-clash rule).
 - **Admins** (Google sign-in, identified by email) manage activities and the student roster.
 - **Quotas**: each activity has a max-student quota set by the admin. When a club is full, students **cannot** choose it — enforced live in the UI **and** atomically in Firestore (race-free).
@@ -110,7 +110,7 @@ which clubs cause it.
 
 - **Admin** — email exists in `admins/{email}`. Manages activities & students,
   views/resets/deletes any student's choices.
-- **Student** — email exists in `students/{email}`. Picks ≥1 CCA and ≥1 ECA.
+- **Student** — email exists in `students/{email}`. Picks **1–2 CCAs and 1–2 ECAs**.
 - **Anyone else** — sees a "not on the list" screen.
 
 ---
@@ -153,8 +153,8 @@ What the shipped `firestore.rules` enforce:
 - **Roster privacy** — only admins can list the `students` collection; each
   student can read **only their own document**. The student view shows "spots
   left" from the `seats` collection, not from other students' docs.
-- **Minimum picks** — a student's save is rejected server-side unless they keep
-  at least **1 CCA and 1 ECA** whenever the choice fields change.
+- **Choice limits** — a student's save is rejected server-side unless they keep
+  **1–2 CCAs and 1–2 ECAs** whenever the choice fields change.
 - **Quotas** — enforced atomically by the app's Firestore transaction
   (reads `seats/{activityId}` counters against `capacity`), so two students
   can't grab the last spot at once.

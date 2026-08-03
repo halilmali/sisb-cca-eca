@@ -864,7 +864,7 @@ button {
   padding: 14px;
   cursor: pointer;
   position: relative;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease, opacity 0.16s ease;
   font-family: inherit;
   color: var(--ink);
 }
@@ -877,6 +877,18 @@ button {
 .pick-card:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* When 2 of a type are already picked, dim the rest so the cap is obvious.
+   They stay clickable so the toast can explain why a 3rd pick is blocked. */
+.pick-card.is-capped {
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+.pick-card.is-capped:hover {
   transform: none;
   box-shadow: none;
 }
