@@ -5,7 +5,7 @@ A simple, self-hosted club choice portal for schools. Built with plain **HTML, C
 
 - **Students** sign in with their Google account and pick **1–2 CCAs and 1–2 ECAs**.
 - The system **blocks any CCA/ECA pair that runs on the same day** (day-clash rule).
-- **Admins** (Google sign-in, identified by email) manage activities and the student roster.
+- **Admins** (Google sign-in, identified by email) manage activities and the student roster — including **editing any student's CCA/ECA choices directly** (with quota-safe seat bookkeeping).
 - **Quotas**: each activity has a max-student quota set by the admin. When a club is full, students **cannot** choose it — enforced live in the UI **and** atomically in Firestore (race-free).
 
 ---
@@ -71,7 +71,7 @@ Sign in with that Google account and you'll see the admin dashboard.
 
 ### 6. Add your students
 
-In the admin **Students** tab, add students by email (one or many at a time).
+In the admin **Students** tab, add students by email (one or many at a time). Each row also offers **View** (see their choices), **Edit choices** (set their CCAs/ECAs for them, respecting the 1–2 limit and quotas), **Reset** (clear their choices and release seats), and **Delete**.
 Students sign in with their school Google account; the app matches them by email
 and pulls their display name from Google automatically.
 

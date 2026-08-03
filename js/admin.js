@@ -8,12 +8,14 @@
 import {
   getActivities,
   getStudents,
+  getSeats,
   addActivity,
   updateActivity,
   deleteActivity,
   addStudent,
   deleteStudent,
   clearChoices,
+  setStudentChoices,
 } from "./store.js";
 import * as auth from "./auth.js";
 import { $, $$, esc, toast, openModal, closeModal, confirmDialog, dayChips, DAYS, fmtDate, numOrZero } from "./ui.js";
@@ -330,6 +332,7 @@ function renderStudentRows(students, activities) {
           <td>${s.submittedAt ? fmtDate(s.submittedAt) : '<span class="muted">Not yet</span>'}</td>
           <td class="ta-right">
             <button class="btn btn--ghost btn--sm" data-view="${esc(s.email)}">View</button>
+            <button class="btn btn--ghost btn--sm" data-editstu="${esc(s.email)}">Edit choices</button>
             <button class="btn btn--ghost btn--sm" data-reset="${esc(s.email)}">Reset</button>
             <button class="btn btn--ghost btn--sm btn--danger-text" data-delstu="${esc(s.email)}">Delete</button>
           </td>
@@ -424,11 +427,124 @@ function bindStudentRowActions(container) {
 
   container.addEventListener("click", (e) => {
     const viewBtn = e.target.closest("[data-view]");
+    const editBtn = e.target.closest("[data-editstu]");
     const resetBtn = e.target.closest("[data-reset]");
     const delBtn = e.target.closest("[data-delstu]");
     if (viewBtn) onView(viewBtn.dataset.view);
+    else if (editBtn) openEditChoicesModal(editBtn.dataset.editstu);
     else if (resetBtn) onReset(resetBtn.dataset.reset);
     else if (delBtn) onDelete(delBtn.dataset.delstu);
+  });
+}
+
+/**
+ * Modal for admins to set a student's CCA/ECA choices directly. Mirrors the
+ * student's own picker: 1–2 of each type, full clubs are disabled, and the
+ * save keeps seat counters / quotas in sync (see setStudentChoices).
+ */
+function openEditChoicesModal(email) {
+  const s = getStudents().find((x) => x.email === email);
+  if (!s) return;
+  const activities = getActivities();
+  const seats = getSeats();
+  const ccaList = activities.filter((a) => a.type === "CCA");
+  const ecaList = activities.filter((a) => a.type === "ECA");
+
+  const selectedCca = new Set(s.cca || []);
+  const selectedEca = new Set(s.eca || []);
+
+  const renderPicks = (list, set, type) =>
+    list
+      .map((a) => {
+        const taken = seats.get(a.id) || 0;
+        const isSelected = set.has(a.id);
+        const full = a.capacity > 0 && taken >= a.capacity && !isSelected;
+        const capped = set.size >= 2 && !isSelected;
+        return `
+          <button type="button" class="admin-pick admin-pick--${type} ${isSelected ? "is-on" : ""} ${full ? "is-full" : ""} ${capped ? "is-capped" : ""}" data-id="${esc(a.id)}" data-type="${type}" ${full ? "disabled" : ""}>
+            <span class="admin-pick__name">${esc(a.name)}</span>
+            <span class="admin-pick__days">${a.days.map((d) => `<span>${d}</span>`).join("")}</span>
+          </button>`;
+      })
+      .join("");
+
+  const clashNote = () => {
+    const ccaDays = new Set(
+      [...selectedCca].map((id) => activities.find((a) => a.id === id)).filter(Boolean).flatMap((a) => a.days)
+    );
+    const ecaDays = new Set(
+      [...selectedEca].map((id) => activities.find((a) => a.id === id)).filter(Boolean).flatMap((a) => a.days)
+    );
+    const clash = [...ccaDays].filter((d) => ecaDays.has(d));
+    return clash.length
+      ? `<div class="alert alert--warn">Heads up: a CCA and an ECA both run on <b>${esc(clash.join(", "))}</b> — the student won't be able to save this combination themselves.</div>`
+      : "";
+  };
+
+  const bodyHtml = `
+    <p class="modal__message">
+      <strong>${esc(s.email)}</strong>${s.className ? ` · Class ${esc(s.className)}` : ""} — set the clubs this student should have (up to 2 of each; leave a section empty to clear it).
+    </p>
+    <div class="modal__section">
+      <h4>CCA <span class="muted" id="edit-cca-count">${selectedCca.size} of 2</span></h4>
+      <div class="admin-pick-grid" id="edit-cca-grid"></div>
+    </div>
+    <div class="modal__section">
+      <h4>ECA <span class="muted" id="edit-eca-count">${selectedEca.size} of 2</span></h4>
+      <div class="admin-pick-grid" id="edit-eca-grid"></div>
+    </div>
+    <div id="edit-clash-note"></div>
+  `;
+
+  openModal({
+    title: `Edit choices — ${esc(s.name || email)}`,
+    bodyHtml,
+    actions: [
+      { label: "Cancel", variant: "ghost" },
+      { label: "Save choices", variant: "primary", submit: true, form: "edit-choices-form", onClick: () => false },
+    ],
+    onMount: (overlay) => {
+      const render = () => {
+        const ccaGrid = overlay.querySelector("#edit-cca-grid");
+        const ecaGrid = overlay.querySelector("#edit-eca-grid");
+        if (ccaGrid) ccaGrid.innerHTML = renderPicks(ccaList, selectedCca, "cca");
+        if (ecaGrid) ecaGrid.innerHTML = renderPicks(ecaList, selectedEca, "eca");
+        const ccaCount = overlay.querySelector("#edit-cca-count");
+        const ecaCount = overlay.querySelector("#edit-eca-count");
+        if (ccaCount) ccaCount.textContent = `${selectedCca.size} of 2`;
+        if (ecaCount) ecaCount.textContent = `${selectedEca.size} of 2`;
+        const note = overlay.querySelector("#edit-clash-note");
+        if (note) note.innerHTML = clashNote();
+      };
+
+      overlay.addEventListener("click", (e) => {
+        const btn = e.target.closest(".admin-pick");
+        if (!btn || btn.disabled) return;
+        const set = btn.dataset.type === "cca" ? selectedCca : selectedEca;
+        const id = btn.dataset.id;
+        if (set.has(id)) set.delete(id);
+        else if (set.size >= 2) {
+          toast(`At most 2 ${btn.dataset.type === "cca" ? "CCAs" : "ECAs"} per student.`, "error");
+          return;
+        } else set.add(id);
+        render();
+      });
+
+      const form = document.createElement("form");
+      form.id = "edit-choices-form";
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          await setStudentChoices(email, [...selectedCca], [...selectedEca]);
+          toast("Choices updated.");
+          closeModal();
+        } catch (err) {
+          toast(err.message, "error");
+        }
+      });
+      overlay.querySelector(".modal__body").appendChild(form);
+      render();
+    },
   });
 }
 

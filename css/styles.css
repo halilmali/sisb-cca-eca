@@ -998,6 +998,83 @@ button {
 }
 
 /* ---------------------------------------------------------------------------
+   Admin: edit-student-choices picker
+   --------------------------------------------------------------------------- */
+.admin-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+}
+
+.admin-pick {
+  appearance: none;
+  font-family: inherit;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--ink);
+  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
+}
+
+.admin-pick:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+.admin-pick.is-on {
+  border-color: var(--cca);
+  background: var(--cca-soft);
+}
+
+.admin-pick--eca.is-on {
+  border-color: var(--eca);
+  background: var(--eca-soft);
+}
+
+.admin-pick.is-full,
+.admin-pick.is-capped {
+  opacity: 0.5;
+}
+
+.admin-pick.is-full {
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.admin-pick__name {
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.admin-pick__days {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.admin-pick__days span {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--ink-3);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.admin-pick.is-on .admin-pick__days span {
+  color: var(--ink-2);
+}
+
+/* ---------------------------------------------------------------------------
    Save bar
    --------------------------------------------------------------------------- */
 .savebar {

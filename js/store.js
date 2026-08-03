@@ -490,6 +490,79 @@ export async function saveChoices(email, ccaIds, ecaIds) {
   });
 }
 
+/**
+ * Admin-only: set a student's choices directly (max 2 CCAs and 2 ECAs).
+ * Keeps the seat counters and quotas in sync — assigning a student to a club
+ * that is already at capacity is rejected, exactly like a student save.
+ * Admins may also leave a type empty (equivalent to a reset for that type).
+ */
+export async function setStudentChoices(email, ccaIds, ecaIds) {
+  const key = String(email).toLowerCase();
+  if (ccaIds.length > 2) throw new Error("A student can have at most 2 CCAs.");
+  if (ecaIds.length > 2) throw new Error("A student can have at most 2 ECAs.");
+
+  if (MODE === "demo") {
+    const s = demoDb.students.find((x) => x.email === key);
+    if (!s) throw new Error("That student isn't on the roster.");
+    assertQuotaFree(ccaIds, ecaIds, key);
+    s.cca = ccaIds;
+    s.eca = ecaIds;
+    s.submittedAt = Date.now();
+    saveDemo();
+    return;
+  }
+
+  const { doc, runTransaction } = await import("firebase/firestore");
+  const studentRef = doc(db, "students", key);
+
+  await runTransaction(db, async (tx) => {
+    // Phase 1 — ALL reads (Firestore forbids reads after the first write).
+    const studentSnap = await tx.get(studentRef);
+    if (!studentSnap.exists()) throw new Error("That student isn't on the roster.");
+    const prev = studentSnap.data();
+    const prevIds = new Set([...(prev.cca || []), ...(prev.eca || [])]);
+    const nextIds = new Set([...ccaIds, ...ecaIds]);
+    const added = [...nextIds].filter((id) => !prevIds.has(id));
+    const removed = [...prevIds].filter((id) => !nextIds.has(id));
+
+    const addInfo = [];
+    for (const actId of added) {
+      const actSnap = await tx.get(doc(db, "activities", actId));
+      if (!actSnap.exists()) throw new Error("One of the chosen clubs no longer exists.");
+      const act = actSnap.data();
+      const seatRef = doc(db, "seats", actId);
+      const seatSnap = await tx.get(seatRef);
+      addInfo.push({ act, seatRef, taken: seatSnap.exists() ? seatSnap.data().count || 0 : 0 });
+    }
+    const removeInfo = [];
+    for (const actId of removed) {
+      const seatRef = doc(db, "seats", actId);
+      const seatSnap = await tx.get(seatRef);
+      removeInfo.push({ seatRef, taken: seatSnap.exists() ? seatSnap.data().count || 0 : 0 });
+    }
+
+    // Quota: can't assign a student to a club that is already full.
+    for (const { act, taken } of addInfo) {
+      if ((act.capacity || 0) > 0 && taken >= act.capacity) {
+        throw new Error(`"${act.name}" is full — its quota has been reached.`);
+      }
+    }
+
+    // Phase 2 — ALL writes.
+    for (const { seatRef, taken } of addInfo) {
+      tx.set(seatRef, { count: taken + 1 }, { merge: true });
+    }
+    for (const { seatRef, taken } of removeInfo) {
+      tx.set(seatRef, { count: Math.max(0, taken - 1) }, { merge: true });
+    }
+    tx.update(studentRef, {
+      cca: ccaIds,
+      eca: ecaIds,
+      submittedAt: Date.now(),
+    });
+  });
+}
+
 /** Clear a student's choices (admin reset). Releases their seats. */
 export async function clearChoices(email) {
   const key = String(email).toLowerCase();
