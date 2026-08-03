@@ -7,7 +7,7 @@
 // ============================================================================
 import {
   getActivities,
-  getStudents,
+  getSeats,
   getStudent,
   saveChoices,
 } from "./store.js";
@@ -29,11 +29,9 @@ export function mountStudentView() {
   const ccaList = activities.filter((a) => a.type === "CCA");
   const ecaList = activities.filter((a) => a.type === "ECA");
 
-  // capacity: count students currently in each activity
-  const takeCount = new Map();
-  getStudents().forEach((s) => {
-    [...(s.cca || []), ...(s.eca || [])].forEach((id) => takeCount.set(id, (takeCount.get(id) || 0) + 1));
-  });
+  // capacity: live seat counts per activity (from the `seats` collection in
+  // firebase mode — reading the whole roster is admin-only for privacy)
+  const takeCount = getSeats();
 
   app.innerHTML = `
     <header class="topbar">

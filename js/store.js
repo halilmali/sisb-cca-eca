@@ -22,7 +22,9 @@ export const MODE = isConfigured ? "firebase" : "demo";
 // Shared reactive state
 // ---------------------------------------------------------------------------
 let activities = [];
-let students = [];
+let students = []; // firebase mode: full roster — only populated for admins
+let seats = new Map(); // firebase mode: activityId -> live seat count
+let myStudent = null; // firebase mode: the signed-in user's own doc
 const listeners = new Set();
 
 function emit() {
@@ -51,7 +53,29 @@ export function getActivity(id) {
 
 export function getStudent(email) {
   const key = String(email).toLowerCase();
-  return getStudents().find((s) => s.email === key);
+  if (MODE === "demo") return getStudents().find((s) => s.email === key);
+  // Students only have read access to their own doc (roster is private).
+  if (myStudent && myStudent.email === key) return myStudent;
+  return students.find((s) => s.email === key); // admin fallback
+}
+
+/**
+ * Live seat counts per activity (activityId -> number of students in it).
+ * In firebase mode this comes from the `seats` collection, which every
+ * signed-in user may read — so the student view can show "spots left"
+ * without exposing the rest of the roster.
+ */
+export function getSeats() {
+  if (MODE === "demo") {
+    const map = new Map();
+    for (const s of demoDb ? demoDb.students : []) {
+      for (const id of [...(s.cca || []), ...(s.eca || [])]) {
+        map.set(id, (map.get(id) || 0) + 1);
+      }
+    }
+    return map;
+  }
+  return seats;
 }
 
 // ---------------------------------------------------------------------------
@@ -175,12 +199,15 @@ function saveDemo() {
 // ---------------------------------------------------------------------------
 let db = null;
 let unsubscribes = [];
+let roleUnsubscribes = [];
 
 async function initFirebase() {
   const { getDb } = await import("./firebase-init.js");
   const { collection, onSnapshot } = await import("firebase/firestore");
   db = await getDb();
 
+  // activities + seats are readable by every signed-in user. The students
+  // roster is role-scoped (see configureAccess) because it's private.
   unsubscribes.push(
     onSnapshot(
       collection(db, "activities"),
@@ -191,14 +218,57 @@ async function initFirebase() {
       (err) => console.error("activities listener failed:", err)
     ),
     onSnapshot(
-      collection(db, "students"),
+      collection(db, "seats"),
       (snap) => {
-        students = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        seats = new Map(snap.docs.map((d) => [d.id, d.data().count || 0]));
         emit();
       },
-      (err) => console.error("students listener failed:", err)
+      (err) => console.error("seats listener failed:", err)
     )
   );
+}
+
+/**
+ * Subscribe to the data this role is allowed to see, and stop any previous
+ * role-scoped subscriptions. Admins get the full students roster; students
+ * get only their own doc. Call whenever the signed-in role changes.
+ */
+export async function configureAccess(role, email) {
+  if (MODE !== "firebase") return;
+  // Drop role-scoped state from any previous session before re-subscribing,
+  // so a later user never sees (or reads via the console) stale roster data.
+  students = [];
+  myStudent = null;
+  for (const unsub of roleUnsubscribes) unsub();
+  roleUnsubscribes = [];
+  if (!db) return;
+
+  const { collection, doc, onSnapshot } = await import("firebase/firestore");
+
+  if (role === "admin") {
+    roleUnsubscribes.push(
+      onSnapshot(
+        collection(db, "students"),
+        (snap) => {
+          students = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          emit();
+        },
+        (err) => console.error("students listener failed:", err)
+      )
+    );
+  } else if (role === "student") {
+    const key = String(email).toLowerCase();
+    roleUnsubscribes.push(
+      onSnapshot(
+        doc(db, "students", key),
+        (snap) => {
+          myStudent = snap.exists() ? { id: snap.id, ...snap.data() } : null;
+          emit();
+        },
+        (err) => console.error("own-student listener failed:", err)
+      )
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

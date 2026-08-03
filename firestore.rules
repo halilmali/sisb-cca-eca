@@ -36,20 +36,35 @@ service cloud.firestore {
 
     // ------------------------------------------------------------------
     // students collection: doc ID = student email (lowercase).
-    // - anyone signed in may read (so the student view can render)
-    // - a student may update only their OWN document, and only the
-    //   fields the app writes (choices, submission time, profile info)
+    // PRIVACY: only admins may list the roster; a student may read ONLY
+    // their own document. The app's student view reads the `seats`
+    // collection for "spots left" instead of other students' docs.
+    // - a student may update only their OWN document, only the fields
+    //   the app writes, and must keep at least 1 CCA and 1 ECA whenever
+    //   they submit/change choices (admins may still clear choices)
     // - admins may do everything (add students, view, reset choices)
     // ------------------------------------------------------------------
     match /students/{email} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin() || (isSignedIn() && request.auth.token.email.lower() == email);
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || (
         isSignedIn() &&
         request.auth.token.email.lower() == email &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "cca", "eca", "submittedAt", "name", "className", "email"
-        ])
+        ]) &&
+        // "Choose at least 1 CCA and 1 ECA" — enforced server-side whenever
+        // the choice fields change (name-only syncs are unaffected). The
+        // `is list` guards reject type-confusion writes (e.g. a string).
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["cca", "eca"]) ||
+          (
+            request.resource.data.cca is list &&
+            request.resource.data.eca is list &&
+            request.resource.data.cca.size() >= 1 &&
+            request.resource.data.eca.size() >= 1
+          )
+        )
       );
     }
 

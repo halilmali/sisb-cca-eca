@@ -146,6 +146,27 @@ firestore.rules    # deploy these rules to Firestore
 
 ## 🔒 Security note
 
-The shipped `firestore.rules` lock activity editing to admins and let students
-update only their own document. Read access is open to any signed-in user so the
-roster views work — tighten that if your school's roster must be private.
+What the shipped `firestore.rules` enforce:
+
+- **Admins only** can create/edit/delete activities, add/remove students, and
+  reset choices. The `admins` collection is console-only (`allow write: false`).
+- **Roster privacy** — only admins can list the `students` collection; each
+  student can read **only their own document**. The student view shows "spots
+  left" from the `seats` collection, not from other students' docs.
+- **Minimum picks** — a student's save is rejected server-side unless they keep
+  at least **1 CCA and 1 ECA** whenever the choice fields change.
+- **Quotas** — enforced atomically by the app's Firestore transaction
+  (reads `seats/{activityId}` counters against `capacity`), so two students
+  can't grab the last spot at once.
+
+Known limitations (client-side app code, not rules):
+
+- **Day-clash protection runs in the app**, not in the rules — the rules
+  language can't iterate the chosen club list and is capped at 10 document
+  reads per request, so the pairwise check can't be expressed there. Honest
+  students are always blocked; a malicious one who edits the JS could save
+  same-day clubs. Full server-side enforcement needs a Cloud Function.
+- **Seat counters** (`seats/{activityId}`) accept ±1 updates from any signed-in
+  user because rules can't verify the enrollment in the same transaction — a
+  hostile client could corrupt quota bookkeeping. The quota transaction still
+  prevents taking a seat when the counter reports full.

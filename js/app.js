@@ -1,7 +1,7 @@
 // ============================================================================
 // ClubBoard — app entry: boot, auth routing, view switching
 // ============================================================================
-import { MODE, initStore, subscribe as subscribeStore, getRole, updateStudentName } from "./store.js";
+import { MODE, initStore, subscribe as subscribeStore, getRole, updateStudentName, configureAccess } from "./store.js";
 import * as auth from "./auth.js";
 import { $, esc } from "./ui.js";
 import { mountAdminView } from "./admin.js";
@@ -24,10 +24,15 @@ async function boot() {
     currentRole = null;
     if (user) {
       currentRole = await getRole(user.email);
+      // Subscribe to exactly the data this role may read (private roster).
+      await configureAccess(currentRole, user.email);
       if (currentRole === "student") {
         // keep the student's display name in sync with their Google account
         updateStudentName(user.email, user.name).catch(() => {});
       }
+    } else {
+      // Signed out — stop role-scoped listeners and drop their cached data.
+      await configureAccess(null, null);
     }
     render();
   });
