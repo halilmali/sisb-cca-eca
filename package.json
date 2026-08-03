@@ -1,0 +1,10 @@
+{
+  "name": "school-club-choice",
+  "version": "1.0.0",
+  "description": "School CCA/ECA club choice system with Firebase",
+  "type": "module",
+  "scripts": {
+    "start": "npx serve . -l 3000",
+    "check": "node --check js/config.js && node --check js/store.js && node --check js/ui.js && node --check js/app.js && node --check js/admin.js && node --check js/student.js"
+  }
+}

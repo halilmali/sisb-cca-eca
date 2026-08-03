@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------
+    // Helper: is the signed-in user an admin?
+    // Admins are documents in the `admins` collection whose document ID
+    // is the user's email address (lowercase), e.g. admins/principal@school.edu
+    // ------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower()));
+    }
+
+    // ------------------------------------------------------------------
+    // admins collection: only the Firebase console / Admin SDK may write.
+    // To make yourself admin: create a document with ID = your email.
+    // ------------------------------------------------------------------
+    match /admins/{email} {
+      allow read: if isSignedIn();
+      allow write: if false; // manage from the Firebase console
+    }
+
+    // ------------------------------------------------------------------
+    // activities collection: any signed-in user (student or admin) can
+    // read. Only admins can create / edit / delete activities.
+    // ------------------------------------------------------------------
+    match /activities/{activityId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // students collection: doc ID = student email (lowercase).
+    // - anyone signed in may read (so the student view can render)
+    // - a student may update only their OWN document, and only the
+    //   fields the app writes (choices, submission time, profile info)
+    // - admins may do everything (add students, view, reset choices)
+    // ------------------------------------------------------------------
+    match /students/{email} {
+      allow read: if isSignedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        request.auth.token.email.lower() == email &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "cca", "eca", "submittedAt", "name", "className", "email"
+        ])
+      );
+    }
+
+    // ------------------------------------------------------------------
+    // seats collection: quota counters for each activity (doc ID = the
+    // activity's ID, shape { count: number }). The app updates them inside
+    // a Firestore transaction (saveChoices / clearChoices / deleteStudent),
+    // which is what makes the quota rule race-free.
+    //
+    // SECURITY NOTE: these rules allow any signed-in user to adjust a
+    // counter by +/-1, because the rule language can't verify that the
+    // student is actually enrolling in the same transaction. The quota is
+    // therefore enforced for students who use the app (the honest path).
+    // For hard guarantees against a hostile client, move the quota check
+    // to a server-side Cloud Function / Admin SDK.
+    // ------------------------------------------------------------------
+    match /seats/{activityId} {
+      allow read: if isSignedIn();
+      allow delete: if isAdmin();
+      allow create: if isAdmin() || (isSignedIn() && request.resource.data.count == 1);
+      allow update: if isSignedIn() && (
+        request.resource.data.count == resource.data.count + 1 ||
+        request.resource.data.count == resource.data.count - 1
+      ) && request.resource.data.count >= 0;
+    }
+  }
+}
