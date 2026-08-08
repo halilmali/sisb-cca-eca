@@ -4,8 +4,6 @@
 __pycache__/
 *.o
 *.obj
-dist/
-build/
 *.class
 *.exe
 *.dll

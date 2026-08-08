@@ -1668,3 +1668,67 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Reports panel
+   --------------------------------------------------------------------------- */
+.reports-section {
+  margin-bottom: 2rem;
+}
+
+.reports-section h2 {
+  font-size: 1.4rem;
+  margin-bottom: 1rem;
+  color: var(--ink);
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 0.5rem;
+}
+
+.report-group {
+  margin-bottom: 1.5rem;
+}
+
+.report-group h3 {
+  font-size: 1.1rem;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+
+.report-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+.report-card h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.report-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+
+.report-count {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 0.75rem;
+  text-align: right;
+}
+
+.table--compact {
+  font-size: 0.85rem;
+}
+
+.table--compact th,
+.table--compact td {
+  padding: 0.5rem 0.75rem;
+}
