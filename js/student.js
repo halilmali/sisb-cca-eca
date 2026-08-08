@@ -25,6 +25,9 @@ export function mountStudentView() {
   // Working selection — starts from the student's saved choices
   const selectedCca = new Set(savedCca);
   const selectedEca = new Set(savedEca);
+  
+  // Get student's gender for restriction checks
+  const studentGender = me?.gender || null;
 
   const ccaList = activities.filter((a) => a.type === "CCA");
   const ecaList = activities.filter((a) => a.type === "ECA");
@@ -83,7 +86,7 @@ export function mountStudentView() {
             <h2>Co-curricular <span class="muted">— pick 1 to 2</span></h2>
             <span class="count-pill" id="cca-count">0 chosen</span>
           </div>
-          ${renderPickList(ccaList, selectedCca, selectedEca, takeCount, "cca")}
+          ${renderPickList(ccaList, selectedCca, selectedEca, takeCount, "cca", studentGender)}
         </section>
         <section class="pick-col">
           <div class="pick-col__head">
@@ -91,7 +94,7 @@ export function mountStudentView() {
             <h2>Extra-curricular <span class="muted">— pick 1 to 2</span></h2>
             <span class="count-pill" id="eca-count">0 chosen</span>
           </div>
-          ${renderPickList(ecaList, selectedCca, selectedEca, takeCount, "eca")}
+          ${renderPickList(ecaList, selectedCca, selectedEca, takeCount, "eca", studentGender)}
         </section>
       </div>
     </main>
@@ -106,11 +109,12 @@ export function mountStudentView() {
 
   // ---- selection logic ----
   const refresh = () => {
-    const { clashDays, clashNames, ccaCount, ecaCount, full } = validate(
+    const { clashDays, clashNames, ccaCount, ecaCount, full, ccaSameDayClash, ecaSameDayClash, genderViolations } = validate(
       selectedCca,
       selectedEca,
       activities,
-      takeCount
+      takeCount,
+      studentGender
     );
 
     // week strip
@@ -131,7 +135,20 @@ export function mountStudentView() {
     // validation banner
     const banner = $("#validation-banner");
     if (banner) {
-      if (clashDays.length) {
+      if (genderViolations.length) {
+        banner.innerHTML = `
+          <div class="alert alert--danger" role="alert">
+            <strong>Gender restriction!</strong>
+            You cannot join ${esc(genderViolations.join(", "))} because ${genderViolations.length > 1 ? "they are" : "it is"} restricted to ${genderViolations.every(v => activities.find(a => a.id === v)?.genderRestriction === "F") ? "girls" : "boys"}.
+          </div>`;
+      } else if (ccaSameDayClash || ecaSameDayClash) {
+        const clashInfo = ccaSameDayClash || ecaSameDayClash;
+        banner.innerHTML = `
+          <div class="alert alert--danger" role="alert">
+            <strong>Same-day conflict!</strong>
+            You have selected multiple ${esc(clashInfo.type)}s that run on the same day${clashInfo.clashDays.length > 1 ? "s" : ""} (<b>${esc(clashInfo.clashDays.join(", "))}</b>): ${esc(clashInfo.clashNames)}. Please choose different ones.
+          </div>`;
+      } else if (clashDays.length) {
         banner.innerHTML = `
           <div class="alert alert--danger" role="alert">
             <strong>Day clash!</strong>
@@ -154,8 +171,8 @@ export function mountStudentView() {
     // savebar
     const status = $("#save-status");
     const saveBtn = $("#btn-save");
-    if (clashDays.length) {
-      status.textContent = "Fix the day clash to save.";
+    if (genderViolations.length || ccaSameDayClash || ecaSameDayClash || clashDays.length) {
+      status.textContent = "Fix the conflicts to save.";
       saveBtn.disabled = true;
     } else if (ccaCount > 2 || ecaCount > 2) {
       const over = [];
@@ -210,9 +227,9 @@ export function mountStudentView() {
 
   // save
   $("#btn-save").addEventListener("click", async () => {
-    const { clashDays, ccaCount, ecaCount } = validate(selectedCca, selectedEca, activities, takeCount);
-    if (clashDays.length || ccaCount < 1 || ecaCount < 1) {
-      toast("Can't save — check the day clash or minimum picks.", "error");
+    const { clashDays, ccaCount, ecaCount, genderViolations, ccaSameDayClash, ecaSameDayClash } = validate(selectedCca, selectedEca, activities, takeCount, studentGender);
+    if (clashDays.length || ccaCount < 1 || ecaCount < 1 || genderViolations.length || ccaSameDayClash || ecaSameDayClash) {
+      toast("Can't save — check the conflicts or minimum picks.", "error");
       return;
     }
     try {
@@ -229,7 +246,7 @@ export function mountStudentView() {
 // ---------------------------------------------------------------------------
 // Rendering helpers
 // ---------------------------------------------------------------------------
-function renderPickList(list, selectedCca, selectedEca, takeCount, type) {
+function renderPickList(list, selectedCca, selectedEca, takeCount, type, studentGender) {
   if (!list.length) {
     return `
       <div class="empty empty--sm">
@@ -249,14 +266,18 @@ function renderPickList(list, selectedCca, selectedEca, takeCount, type) {
           const isSelected = set.has(a.id);
           const full = a.capacity > 0 && chosen >= a.capacity && !isSelected;
           const spotsLeft = a.capacity > 0 ? a.capacity - chosen : null;
+          // Check gender restriction
+          const genderRestricted = studentGender && a.genderRestriction && a.genderRestriction !== studentGender;
+          const isWrongGender = genderRestricted && !isSelected;
           return `
-            <button class="pick-card pick-card--${type} ${isSelected ? "is-selected" : ""} ${full ? "is-full" : ""}"
+            <button class="pick-card pick-card--${type} ${isSelected ? "is-selected" : ""} ${full ? "is-full" : ""} ${isWrongGender ? "is-gender-restricted" : ""}"
               data-id="${esc(a.id)}" data-type="${type}" type="button"
-              ${full ? "disabled" : ""}>
+              ${full || isWrongGender ? "disabled" : ""}>
               <span class="pick-card__check" aria-hidden="true">✓</span>
               <div class="pick-card__top">
                 <strong>${esc(a.name)}</strong>
                 ${full ? '<span class="full-pill">Full</span>' : ""}
+                ${a.genderRestriction ? `<span class="type-badge type-badge--${a.genderRestriction === "F" ? "cca" : "eca"}" style="margin-left:6px;">${a.genderRestriction === "F" ? "Girls" : "Boys"}</span>` : ""}
               </div>
               ${a.description ? `<p class="pick-card__desc">${esc(a.description)}</p>` : ""}
               <div class="day-chips">${dayChips(a.days)}</div>
@@ -264,12 +285,14 @@ function renderPickList(list, selectedCca, selectedEca, takeCount, type) {
                 <span>🕒 ${esc(a.time || "—")}</span>
                 <span>📍 ${esc(a.venue || "—")}</span>
               </div>
-              <div class="pick-card__spots ${full ? "spots--full" : ""}">
+              <div class="pick-card__spots ${full ? "spots--full" : ""}" style="font-size:1.05em;font-weight:700;">
                 ${
                   full
                     ? "Quota full — no spots left"
+                    : isWrongGender
+                    ? `Not available for your gender`
                     : a.capacity > 0
-                    ? `${spotsLeft} of ${a.capacity} spots left`
+                    ? `<b style="font-size:1.2em">${spotsLeft}</b> of ${a.capacity} spots left`
                     : "No quota limit"
                 }
               </div>
@@ -283,7 +306,7 @@ function renderPickList(list, selectedCca, selectedEca, takeCount, type) {
 // ---------------------------------------------------------------------------
 // Validation — the heart of the day-clash rule
 // ---------------------------------------------------------------------------
-function validate(selectedCca, selectedEca, activities, takeCount) {
+function validate(selectedCca, selectedEca, activities, takeCount, studentGender) {
   const acts = new Map(activities.map((a) => [a.id, a]));
 
   const ccaActs = [...selectedCca].map((id) => acts.get(id)).filter(Boolean);
@@ -300,6 +323,22 @@ function validate(selectedCca, selectedEca, activities, takeCount) {
     ),
   ].join(", ");
 
+  // Check for same-day conflicts within CCAs
+  const ccaSameDayClash = checkSameTypeClash(ccaActs, "CCA");
+  // Check for same-day conflicts within ECAs
+  const ecaSameDayClash = checkSameTypeClash(ecaActs, "ECA");
+  
+  // Check gender restrictions
+  const genderViolations = [];
+  if (studentGender) {
+    [...selectedCca, ...selectedEca].forEach((id) => {
+      const a = acts.get(id);
+      if (a && a.genderRestriction && a.genderRestriction !== studentGender) {
+        genderViolations.push(a.name);
+      }
+    });
+  }
+
   const full = [];
   [...selectedCca, ...selectedEca].forEach((id) => {
     const a = acts.get(id);
@@ -312,5 +351,45 @@ function validate(selectedCca, selectedEca, activities, takeCount) {
     ccaCount: ccaActs.length,
     ecaCount: ecaActs.length,
     full,
+    ccaSameDayClash,
+    ecaSameDayClash,
+    genderViolations,
   };
+}
+
+/**
+ * Check if multiple activities of the same type (CCA or ECA) run on the same day.
+ * Returns an object with clash info if found, null otherwise.
+ */
+function checkSameTypeClash(acts, type) {
+  if (acts.length <= 1) return null;
+  
+  const dayMap = new Map();
+  for (const act of acts) {
+    for (const day of act.days) {
+      if (!dayMap.has(day)) {
+        dayMap.set(day, []);
+      }
+      dayMap.get(day).push(act.name);
+    }
+  }
+  
+  const clashDays = [];
+  const clashNames = [];
+  for (const [day, names] of dayMap.entries()) {
+    if (names.length > 1) {
+      clashDays.push(day);
+      clashNames.push(...names);
+    }
+  }
+  
+  if (clashDays.length > 0) {
+    return {
+      clashDays,
+      clashNames: [...new Set(clashNames)].join(", "),
+      type,
+    };
+  }
+  
+  return null;
 }
