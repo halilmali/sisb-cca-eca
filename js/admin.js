@@ -374,15 +374,17 @@ function openStudentsModal() {
       </label>
       <div class="field-row">
         <label class="field"><span>Nickname <em class="muted">(optional)</em></span><input name="nickname" placeholder="e.g. Alex"></label>
-        <label class="field"><span>Class <em class="muted">(optional)</em></span><input name="className" placeholder="e.g. 7A"></label>
+        <label class="field"><span>Full name <em class="muted">(optional)</em></span><input name="fullName" placeholder="e.g. Alexander Chen"></label>
       </div>
-      <div class="field">
-        <span>Gender</span>
-        <div class="seg" id="gender-seg">
-          <button type="button" class="seg__opt is-on" data-gender="">Not specified</button>
-          <button type="button" class="seg__opt" data-gender="M">Male</button>
-          <button type="button" class="seg__opt" data-gender="F">Female</button>
-        </div>
+      <div class="field-row">
+        <label class="field"><span>Class <em class="muted">(optional)</em></span><input name="className" placeholder="e.g. 7A"></label>
+        <label class="field"><span>Gender</span>
+          <div class="seg" id="gender-seg">
+            <button type="button" class="seg__opt is-on" data-gender="">Not specified</button>
+            <button type="button" class="seg__opt" data-gender="M">Male</button>
+            <button type="button" class="seg__opt" data-gender="F">Female</button>
+          </div>
+        </label>
       </div>
       <div class="field">
         <span>Or add many at once via spreadsheet paste — columns: email, nickname, full name, class, gender</span>
@@ -412,6 +414,7 @@ function openStudentsModal() {
         const fd = new FormData(form);
         const singleEmail = fd.get("email").trim().toLowerCase();
         const singleNickname = fd.get("nickname").trim();
+        const singleFullName = fd.get("fullName").trim();
         const singleClass = fd.get("className").trim();
         const bulkText = fd.get("bulk") || "";
         
@@ -440,7 +443,7 @@ function openStudentsModal() {
         if (singleEmail) {
           emails.unshift(singleEmail);
           nicknames.unshift(singleNickname);
-          names.unshift("");
+          names.unshift(singleFullName);
           classes.unshift(singleClass);
           genders.unshift(gender);
         }

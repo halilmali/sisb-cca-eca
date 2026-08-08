@@ -993,6 +993,18 @@ button {
   font-weight: 500;
 }
 
+.pick-card.is-gender-restricted {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.pick-card.is-gender-restricted:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .quota-full-text {
   color: var(--danger);
 }
