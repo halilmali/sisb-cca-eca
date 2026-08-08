@@ -68,6 +68,7 @@ export function mountAdminView() {
       <nav class="tabs" role="tablist">
         <button class="tab ${activeTab === "activities" ? "is-active" : ""}" data-tab="activities" role="tab">Activities</button>
         <button class="tab ${activeTab === "students" ? "is-active" : ""}" data-tab="students" role="tab">Students</button>
+        <button class="tab ${activeTab === "reports" ? "is-active" : ""}" data-tab="reports" role="tab">Reports</button>
       </nav>
 
       <section class="panel ${activeTab === "activities" ? "" : "is-hidden"}" data-panel="activities">
@@ -87,6 +88,13 @@ export function mountAdminView() {
           </div>
         </div>
         ${renderStudents(students, activities)}
+      </section>
+
+      <section class="panel ${activeTab === "reports" ? "" : "is-hidden"}" data-panel="reports">
+        <div class="panel__toolbar">
+          <h2>Reports</h2>
+        </div>
+        ${renderReports(activities, students)}
       </section>
     </main>
   `;
@@ -121,6 +129,9 @@ export function mountAdminView() {
       if (tbody) tbody.innerHTML = renderStudentRows(filterStudents(students), activities);
     });
   }
+
+  // Bind report actions
+  bindReportActions(shell);
 }
 
 // ---------------------------------------------------------------------------
@@ -374,15 +385,17 @@ function openStudentsModal() {
       </label>
       <div class="field-row">
         <label class="field"><span>Nickname <em class="muted">(optional)</em></span><input name="nickname" placeholder="e.g. Alex"></label>
-        <label class="field"><span>Class <em class="muted">(optional)</em></span><input name="className" placeholder="e.g. 7A"></label>
+        <label class="field"><span>Full name <em class="muted">(optional)</em></span><input name="fullName" placeholder="e.g. Alexander Chen"></label>
       </div>
-      <div class="field">
-        <span>Gender</span>
-        <div class="seg" id="gender-seg">
-          <button type="button" class="seg__opt is-on" data-gender="">Not specified</button>
-          <button type="button" class="seg__opt" data-gender="M">Male</button>
-          <button type="button" class="seg__opt" data-gender="F">Female</button>
-        </div>
+      <div class="field-row">
+        <label class="field"><span>Class <em class="muted">(optional)</em></span><input name="className" placeholder="e.g. 7A"></label>
+        <label class="field"><span>Gender</span>
+          <div class="seg" id="gender-seg">
+            <button type="button" class="seg__opt is-on" data-gender="">Not specified</button>
+            <button type="button" class="seg__opt" data-gender="M">Male</button>
+            <button type="button" class="seg__opt" data-gender="F">Female</button>
+          </div>
+        </label>
       </div>
       <div class="field">
         <span>Or add many at once via spreadsheet paste — columns: email, nickname, full name, class, gender</span>
@@ -412,6 +425,7 @@ function openStudentsModal() {
         const fd = new FormData(form);
         const singleEmail = fd.get("email").trim().toLowerCase();
         const singleNickname = fd.get("nickname").trim();
+        const singleFullName = fd.get("fullName").trim();
         const singleClass = fd.get("className").trim();
         const bulkText = fd.get("bulk") || "";
         
@@ -440,7 +454,7 @@ function openStudentsModal() {
         if (singleEmail) {
           emails.unshift(singleEmail);
           nicknames.unshift(singleNickname);
-          names.unshift("");
+          names.unshift(singleFullName);
           classes.unshift(singleClass);
           genders.unshift(gender);
         }
@@ -647,6 +661,169 @@ async function viewStudent(email) {
     `,
     actions: [{ label: "Close", variant: "primary" }],
   });
+}
+
+// ---------------------------------------------------------------------------
+// Reports panel
+// ---------------------------------------------------------------------------
+function renderReports(activities, students) {
+  const ccaList = activities.filter((a) => a.type === "CCA");
+  const ecaList = activities.filter((a) => a.type === "ECA");
+  
+  // Build per-activity reports
+  const activityReport = (actList, type) => {
+    if (!actList.length) return `<div class="empty"><p>No ${type} activities defined.</p></div>`;
+    
+    return actList.map((act) => {
+      const enrolled = students.filter((s) => (type === "CCA" ? s.cca : s.eca).includes(act.id));
+      return `
+        <div class="report-card">
+          <h3>${esc(act.name)} <span class="type-badge type-badge--${type.toLowerCase()}">${type}</span></h3>
+          <p class="report-meta">${esc(act.days.join(", "))} · ${esc(act.time || "—")} · ${esc(act.venue || "—")}${act.genderRestriction ? ` · ${act.genderRestriction === "F" ? "Girls only" : "Boys only"}` : ""}</p>
+          ${enrolled.length > 0 ? `
+            <table class="table table--compact">
+              <thead><tr><th>Nickname</th><th>Full Name</th><th>Class</th></tr></thead>
+              <tbody>
+                ${enrolled.map((s) => `
+                  <tr>
+                    <td>${esc(s.nickname || "—")}</td>
+                    <td>${esc(s.name || "—")}</td>
+                    <td>${esc(s.className || "—")}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+            <p class="report-count"><b>${enrolled.length}</b> of ${act.capacity || "∞"} spots filled</p>
+          ` : '<p class="muted">No students enrolled yet.</p>'}
+        </div>
+      `;
+    }).join("");
+  };
+
+  // Build per-class report
+  const classes = [...new Set(students.map((s) => s.className).filter(Boolean))].sort();
+  const classReport = () => {
+    if (!classes.length) return `<div class="empty"><p>No students with class information yet.</p></div>`;
+    
+    return classes.map((cls) => {
+      const classStudents = students.filter((s) => s.className === cls);
+      const nameOf = (id) => activities.find((a) => a.id === id);
+      
+      return `
+        <div class="report-card">
+          <h3>Class ${esc(cls)}</h3>
+          <table class="table table--compact">
+            <thead><tr><th>Nickname</th><th>Full Name</th><th>CCA + Location</th><th>ECA + Location</th></tr></thead>
+            <tbody>
+              ${classStudents.map((s) => {
+                const ccaNames = (s.cca || []).map((id) => {
+                  const a = nameOf(id);
+                  return a ? `${esc(a.name)} (${esc(a.venue || "—")})` : "?";
+                }).join(", ") || "—";
+                const ecaNames = (s.eca || []).map((id) => {
+                  const a = nameOf(id);
+                  return a ? `${esc(a.name)} (${esc(a.venue || "—")})` : "?";
+                }).join(", ") || "—";
+                return `
+                  <tr>
+                    <td>${esc(s.nickname || "—")}</td>
+                    <td>${esc(s.name || "—")}</td>
+                    <td>${esc(ccaNames)}</td>
+                    <td>${esc(ecaNames)}</td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+          <p class="report-count"><b>${classStudents.length}</b> student${classStudents.length === 1 ? "" : "s"}</p>
+        </div>
+      `;
+    }).join("");
+  };
+
+  return `
+    <div class="reports-section">
+      <h2>Per Activity Reports</h2>
+      <div class="report-group">
+        <h3>CCA Reports</h3>
+        ${activityReport(ccaList, "CCA")}
+      </div>
+      <div class="report-group">
+        <h3>ECA Reports</h3>
+        ${activityReport(ecaList, "ECA")}
+      </div>
+    </div>
+    <div class="reports-section">
+      <h2>Per Class Reports</h2>
+      ${classReport()}
+    </div>
+    <div class="panel__toolbar" style="margin-top:1rem;">
+      <button class="btn btn--primary" id="btn-export-csv">Export All to CSV</button>
+    </div>
+  `;
+}
+
+function bindReportActions(container) {
+  container.addEventListener("click", async (e) => {
+    const exportBtn = e.target.closest("#btn-export-csv");
+    if (exportBtn) {
+      await exportAllReportsToCSV();
+    }
+  });
+}
+
+async function exportAllReportsToCSV() {
+  const activities = getActivities();
+  const students = getStudents();
+  
+  let csvContent = "data:text/csv;charset=utf-8,";
+  
+  // Per-activity reports
+  csvContent += "=== PER ACTIVITY REPORTS ===\n\n";
+  
+  for (const act of activities) {
+    const type = act.type;
+    const enrolled = students.filter((s) => (type === "CCA" ? s.cca : s.eca).includes(act.id));
+    csvContent += `Activity: ${act.name} (${type})\n`;
+    csvContent += `Days: ${act.days.join(", ")} | Time: ${act.time || "N/A"} | Venue: ${act.venue || "N/A"}\n`;
+    csvContent += `Enrolled: ${enrolled.length} / ${act.capacity || "Unlimited"}\n`;
+    csvContent += "Nickname,Full Name,Class\n";
+    for (const s of enrolled) {
+      csvContent += `"${s.nickname || ""}","${s.name || ""}","${s.className || ""}"\n`;
+    }
+    csvContent += "\n";
+  }
+  
+  // Per-class reports
+  csvContent += "=== PER CLASS REPORTS ===\n\n";
+  const classes = [...new Set(students.map((s) => s.className).filter(Boolean))].sort();
+  
+  for (const cls of classes) {
+    const classStudents = students.filter((s) => s.className === cls);
+    csvContent += `Class: ${cls}\n`;
+    csvContent += "Nickname,Full Name,CCA with Location,ECA with Location\n";
+    for (const s of classStudents) {
+      const ccaLocs = (s.cca || []).map((id) => {
+        const a = activities.find((x) => x.id === id);
+        return a ? `${a.name} (${a.venue || "N/A"})` : "?";
+      }).join(", ") || "None";
+      const ecaLocs = (s.eca || []).map((id) => {
+        const a = activities.find((x) => x.id === id);
+        return a ? `${a.name} (${a.venue || "N/A"})` : "?";
+      }).join(", ") || "None";
+      csvContent += `"${s.nickname || ""}","${s.name || ""}","${ccaLocs}","${ecaLocs}"\n`;
+    }
+    csvContent += "\n";
+  }
+  
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `clubboard_report_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  toast("Report exported to CSV.");
 }
 
 // The activity grid buttons are bound by event delegation too.
