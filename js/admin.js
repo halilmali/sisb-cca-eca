@@ -152,8 +152,24 @@ function renderActivityGrid(activities, students) {
       : full
       ? "Full"
       : `${Math.max(0, quota - chosen)} spot${quota - chosen === 1 ? "" : "s"} left`;
+    const genderBadge = a.genderRestriction
+      ? `<span class="type-badge type-badge--${a.genderRestriction === "F" ? "cca" : "eca"}">${a.genderRestriction === "F" ? "Girls only" : "Boys only"}</span>`
+      : "";
     return `
       <article class="act-card act-card--${a.type.toLowerCase()}">
+        <div class="act-card__top">
+          <span class="type-badge type-badge--${a.type.toLowerCase()}" style="display:flex;align-items:center;gap:6px;">
+            ${a.type}
+            ${genderBadge ? `<span style="opacity:0.6">·</span>${genderBadge}` : ""}
+    const genderBadge = a.genderRestriction
+      ? `<span class="type-badge type-badge--${a.genderRestriction === "F" ? "cca" : "eca"}">${a.genderRestriction === "F" ? "Girls only" : "Boys only"}</span>`
+      : "";
+    return `
+      <article class="act-card act-card--${a.type.toLowerCase()}">
+        <div class="act-card__top">
+          <span class="type-badge type-badge--${a.type.toLowerCase()}" style="display:flex;align-items:center;gap:6px;">
+            ${a.type}
+            ${genderBadge ? `<span style="opacity:0.6">·</span>${genderBadge}` : ""}
         <div class="act-card__top">
           <span class="type-badge type-badge--${a.type.toLowerCase()}">${a.type}</span>
           <div class="act-card__actions">
@@ -167,7 +183,7 @@ function renderActivityGrid(activities, students) {
         <dl class="act-card__meta">
           <div><dt>Time</dt><dd>${esc(a.time || "—")}</dd></div>
           <div><dt>Venue</dt><dd>${esc(a.venue || "—")}</dd></div>
-          <div><dt>Quota</dt><dd>${quota === null ? "Unlimited" : `${chosen}/${quota} filled`} · <b class="${full ? "quota-full-text" : ""}">${status}</b></dd></div>
+          <div><dt>Quota</dt><dd>${quota === null ? "Unlimited" : `<b style="font-size:1.05em">${chosen}/${quota} filled</b>`} · <b class="${full ? "quota-full-text" : ""}" style="font-weight:700">${status}</b></dd></div>
         </dl>
       </article>
     `;
@@ -207,6 +223,14 @@ function openActivityModal(activity = null) {
         <input name="capacity" type="number" min="0" max="500" value="${a.capacity ?? 0}">
       </label>
       <label class="field">
+        <span>Gender restriction <em class="muted">(optional; for CCAs/ECAs that are single-gender)</em></span>
+        <div class="seg" id="gender-restriction-seg">
+          <button type="button" class="seg__opt ${(a.genderRestriction || "") === "" ? "is-on" : ""}" data-gender="">None (co-ed)</button>
+          <button type="button" class="seg__opt ${a.genderRestriction === "F" ? "is-on" : ""}" data-gender="F">Girls only (F)</button>
+          <button type="button" class="seg__opt ${a.genderRestriction === "M" ? "is-on" : ""}" data-gender="M">Boys only (M)</button>
+        </div>
+      </label>
+      <label class="field">
         <span>Description</span>
         <textarea name="description" rows="2" maxlength="200" placeholder="Short blurb for students">${esc(a.description || "")}</textarea>
       </label>
@@ -222,10 +246,17 @@ function openActivityModal(activity = null) {
     ],
     onMount: (overlay) => {
       let type = a.type || "CCA";
+      let genderRestriction = a.genderRestriction || "";
       $("#type-seg", overlay).addEventListener("click", (e) => {
         const opt = e.target.closest(".seg__opt");
         if (!opt) return;
         type = opt.dataset.type;
+        $$(".seg__opt", overlay).forEach((o) => o.classList.toggle("is-on", o === opt));
+      });
+      $("#gender-restriction-seg", overlay).addEventListener("click", (e) => {
+        const opt = e.target.closest(".seg__opt");
+        if (!opt) return;
+        genderRestriction = opt.dataset.gender;
         $$(".seg__opt", overlay).forEach((o) => o.classList.toggle("is-on", o === opt));
       });
       $$(".day-opt", overlay).forEach((btn) =>
@@ -247,6 +278,7 @@ function openActivityModal(activity = null) {
           time: fd.get("time").trim(),
           venue: fd.get("venue").trim(),
           capacity: numOrZero(fd.get("capacity")),
+          genderRestriction: genderRestriction || null,
           description: fd.get("description").trim(),
         };
         try {
@@ -315,14 +347,15 @@ function renderStudentRows(students, activities) {
       const ecaChips = sEca.length
         ? sEca.map((id) => `<span class="mini-chip mini-chip--eca" title="${esc(nameOf(id))}">${esc(nameOf(id))}</span>`).join("")
         : '<span class="muted">—</span>';
+      const displayName = s.nickname ? `${esc(s.nickname)} (${esc(s.name || "—")})` : esc(s.name || "—");
       return `
         <tr>
           <td>
             <div class="stu-id">
               <span class="avatar avatar--sm">${esc((s.name || s.email)[0]?.toUpperCase() || "?")}</span>
               <div>
-                <strong>${esc(s.name || "—")}</strong>
-                <small>${esc(s.email)}</small>
+                <strong>${displayName}</strong>
+                <small>${esc(s.email)}${s.gender ? ` · ${esc(s.gender)}` : ""}</small>
               </div>
             </div>
           </td>
@@ -350,11 +383,20 @@ function openStudentsModal() {
         <input name="email" type="email" placeholder="student@school.edu">
       </label>
       <div class="field-row">
+        <label class="field"><span>Nickname <em class="muted">(optional)</em></span><input name="nickname" placeholder="e.g. Alex"></label>
         <label class="field"><span>Class <em class="muted">(optional)</em></span><input name="className" placeholder="e.g. 7A"></label>
       </div>
       <div class="field">
-        <span>Or add many at once — one email per line</span>
-        <textarea name="bulk" rows="5" placeholder="alex@school.edu&#10;mia@school.edu&#10;sara@school.edu"></textarea>
+        <span>Gender</span>
+        <div class="seg" id="gender-seg">
+          <button type="button" class="seg__opt is-on" data-gender="">Not specified</button>
+          <button type="button" class="seg__opt" data-gender="M">Male</button>
+          <button type="button" class="seg__opt" data-gender="F">Female</button>
+        </div>
+      </div>
+      <div class="field">
+        <span>Or add many at once via spreadsheet paste — columns: email, nickname, full name, class, gender</span>
+        <textarea name="bulk" rows="6" placeholder="alex@school.edu,Alex,Alexander Chen,7A,M&#10;mia@school.edu,Mia,Mia Patel,7B,F"></textarea>
       </div>
       <p class="field__note">Students sign in with Google and are matched by this email. Their name appears automatically.</p>
     </form>
@@ -367,25 +409,61 @@ function openStudentsModal() {
       { label: "Add to roster", variant: "primary", submit: true, form: "students-form", onClick: () => false },
     ],
     onMount: (overlay) => {
+      let gender = "";
+      $("#gender-seg", overlay).addEventListener("click", (e) => {
+        const opt = e.target.closest(".seg__opt");
+        if (!opt) return;
+        gender = opt.dataset.gender;
+        $$(".seg__opt", overlay).forEach((o) => o.classList.toggle("is-on", o === opt));
+      });
       const form = $("#students-form", overlay);
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const fd = new FormData(form);
-        const single = fd.get("email").trim().toLowerCase();
-        const bulk = (fd.get("bulk") || "")
-          .split(/[\n,;]+/)
-          .map((x) => x.trim().toLowerCase())
-          .filter(Boolean);
-        const emails = single ? [single, ...bulk] : bulk;
-        const unique = [...new Set(emails)];
-        if (!unique.length) {
+        const singleEmail = fd.get("email").trim().toLowerCase();
+        const singleNickname = fd.get("nickname").trim();
+        const singleClass = fd.get("className").trim();
+        const bulkText = fd.get("bulk") || "";
+        
+        const emails = [];
+        const nicknames = [];
+        const names = [];
+        const classes = [];
+        const genders = [];
+        
+        // Parse bulk spreadsheet data
+        if (bulkText.trim()) {
+          const lines = bulkText.split(/\n/).filter(line => line.trim());
+          for (const line of lines) {
+            const parts = line.split(/,/).map(p => p.trim()).filter(Boolean);
+            if (parts.length >= 1) {
+              emails.push(parts[0].toLowerCase());
+              nicknames.push(parts[1] || "");
+              names.push(parts[2] || "");
+              classes.push(parts[3] || "");
+              genders.push(parts[4] || "");
+            }
+          }
+        }
+        
+        // Add single student
+        if (singleEmail) {
+          emails.unshift(singleEmail);
+          nicknames.unshift(singleNickname);
+          names.unshift("");
+          classes.unshift(singleClass);
+          genders.unshift(gender);
+        }
+        
+        if (!emails.length) {
           toast("Enter at least one email.", "error");
           return;
         }
+        
         let added = 0;
         let skipped = 0;
-        for (const email of unique) {
-          const ok = await addStudent(email, "", fd.get("className").trim());
+        for (let i = 0; i < emails.length; i++) {
+          const ok = await addStudent(emails[i], names[i] || "", classes[i] || "", nicknames[i] || "", genders[i] || "");
           if (ok) added++;
           else skipped++;
         }
