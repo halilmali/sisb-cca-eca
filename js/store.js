@@ -9,9 +9,10 @@
 //
 // Firestore layout
 //   activities/{autoId}   { name, type: "CCA"|"ECA", days: ["Mon",...],
-//                           time, venue, capacity, description, createdAt }
-//   students/{email}      { email, name, className, cca: [actId...],
-//                           eca: [actId...], submittedAt }
+//                           time, venue, capacity, description, createdAt,
+//                           genderRestriction?: "F"|"M"|null }
+//   students/{email}      { email, name, nickname, className, gender: "M"|"F",
+//                           cca: [actId...], eca: [actId...], submittedAt }
 //   admins/{email}        { addedAt }   // doc exists  => user is admin
 // ============================================================================
 import { isConfigured } from "./config.js";
@@ -92,6 +93,7 @@ const DEMO_ACTIVITIES = [
     venue: "Main Gym",
     capacity: 20,
     description: "Shoot hoops, build teamwork, stay fit.",
+    genderRestriction: null,
   },
   {
     name: "Robotics Club",
@@ -101,6 +103,7 @@ const DEMO_ACTIVITIES = [
     venue: "Maker Lab",
     capacity: 16,
     description: "Build and program your own robot.",
+    genderRestriction: null,
   },
   {
     name: "Debate Team",
@@ -110,6 +113,17 @@ const DEMO_ACTIVITIES = [
     venue: "Room 204",
     capacity: 24,
     description: "Argue with style. Win with evidence.",
+    genderRestriction: null,
+  },
+  {
+    name: "Girls' Netball",
+    type: "CCA",
+    days: ["Tue", "Thu"],
+    time: "3:30 PM – 5:00 PM",
+    venue: "Sports Hall",
+    capacity: 18,
+    description: "Netball for girls only. Build teamwork and fitness.",
+    genderRestriction: "F",
   },
   {
     name: "Chess Club",
@@ -119,6 +133,7 @@ const DEMO_ACTIVITIES = [
     venue: "Library",
     capacity: 20,
     description: "From pawn to grandmaster.",
+    genderRestriction: null,
   },
   {
     name: "Art Studio",
@@ -128,6 +143,7 @@ const DEMO_ACTIVITIES = [
     venue: "Art Room",
     capacity: 18,
     description: "Painting, sketching, and sculpture.",
+    genderRestriction: null,
   },
   {
     name: "Coding Club",
@@ -137,6 +153,7 @@ const DEMO_ACTIVITIES = [
     venue: "Computer Lab",
     capacity: 15,
     description: "Learn to build things with code.",
+    genderRestriction: null,
   },
 ];
 
@@ -153,7 +170,9 @@ function demoSeed() {
       {
         email: "alex@demo.school",
         name: "Alex Chen",
+        nickname: "Alex",
         className: "7A",
+        gender: "M",
         cca: ["demo-act-1"],
         eca: ["demo-act-4"],
         submittedAt: Date.now() - 86400000,
@@ -161,7 +180,9 @@ function demoSeed() {
       {
         email: "mia@demo.school",
         name: "Mia Patel",
+        nickname: "Mia",
         className: "7B",
+        gender: "F",
         cca: [],
         eca: [],
         submittedAt: null,
@@ -344,14 +365,16 @@ export async function deleteActivity(id) {
 }
 
 /** Add a student (by email). Returns false if the email is already on the list. */
-export async function addStudent(email, name = "", className = "") {
+export async function addStudent(email, name = "", className = "", nickname = "", gender = "") {
   const key = String(email).toLowerCase().trim();
   if (MODE === "demo") {
     if (demoDb.students.some((s) => s.email === key)) return false;
     demoDb.students.push({
       email: key,
       name,
+      nickname,
       className,
+      gender,
       cca: [],
       eca: [],
       submittedAt: null,
@@ -366,7 +389,9 @@ export async function addStudent(email, name = "", className = "") {
   await setDoc(ref, {
     email: key,
     name,
+    nickname,
     className,
+    gender,
     cca: [],
     eca: [],
     submittedAt: null,
