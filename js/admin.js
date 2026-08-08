@@ -161,17 +161,7 @@ function renderActivityGrid(activities, students) {
           <span class="type-badge type-badge--${a.type.toLowerCase()}" style="display:flex;align-items:center;gap:6px;">
             ${a.type}
             ${genderBadge ? `<span style="opacity:0.6">·</span>${genderBadge}` : ""}
-    const genderBadge = a.genderRestriction
-      ? `<span class="type-badge type-badge--${a.genderRestriction === "F" ? "cca" : "eca"}">${a.genderRestriction === "F" ? "Girls only" : "Boys only"}</span>`
-      : "";
-    return `
-      <article class="act-card act-card--${a.type.toLowerCase()}">
-        <div class="act-card__top">
-          <span class="type-badge type-badge--${a.type.toLowerCase()}" style="display:flex;align-items:center;gap:6px;">
-            ${a.type}
-            ${genderBadge ? `<span style="opacity:0.6">·</span>${genderBadge}` : ""}
-        <div class="act-card__top">
-          <span class="type-badge type-badge--${a.type.toLowerCase()}">${a.type}</span>
+          </span>
           <div class="act-card__actions">
             <button class="icon-btn" data-edit="${esc(a.id)}" aria-label="Edit ${esc(a.name)}">✏️</button>
             <button class="icon-btn icon-btn--danger" data-del="${esc(a.id)}" aria-label="Delete ${esc(a.name)}">🗑</button>
