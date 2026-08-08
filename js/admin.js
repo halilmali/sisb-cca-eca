@@ -757,8 +757,9 @@ function renderReports(activities, students) {
       <h2>Per Class Reports</h2>
       ${classReport()}
     </div>
-    <div class="panel__toolbar" style="margin-top:1rem;">
+    <div class="panel__toolbar" style="margin-top:1rem; gap:0.5rem;">
       <button class="btn btn--primary" id="btn-export-csv">Export All to CSV</button>
+      <button class="btn btn--secondary" id="btn-export-xls">Export All to XLS</button>
     </div>
   `;
 }
@@ -766,8 +767,11 @@ function renderReports(activities, students) {
 function bindReportActions(container) {
   container.addEventListener("click", async (e) => {
     const exportBtn = e.target.closest("#btn-export-csv");
+    const exportXlsBtn = e.target.closest("#btn-export-xls");
     if (exportBtn) {
       await exportAllReportsToCSV();
+    } else if (exportXlsBtn) {
+      await exportAllReportsToXLS();
     }
   });
 }
@@ -824,6 +828,108 @@ async function exportAllReportsToCSV() {
   link.click();
   document.body.removeChild(link);
   toast("Report exported to CSV.");
+}
+
+async function exportAllReportsToXLS() {
+  const activities = getActivities();
+  const students = getStudents();
+  
+  // Build HTML table content that Excel can interpret as XLS
+  let xlsContent = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" 
+          xmlns:x="urn:schemas-microsoft-com:office:excel" 
+          xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="UTF-8">
+      <!--[if gte mso 9]>
+      <xml>
+        <x:ExcelWorkbook>
+          <x:ExcelWorksheets>
+            <x:ExcelWorksheet>
+              <x:Name>ClubBoard Report</x:Name>
+              <x:WorksheetOptions>
+                <x:DisplayGridlines/>
+              </x:WorksheetOptions>
+            </x:ExcelWorksheet>
+          </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+      </xml>
+      <![endif]-->
+      <style>
+        table { border-collapse: collapse; }
+        th, td { border: 1px solid #000; padding: 6px 10px; text-align: left; }
+        th { background-color: #f0f0f0; font-weight: bold; }
+        h2 { font-size: 16pt; margin-top: 20px; }
+        h3 { font-size: 12pt; margin-top: 15px; }
+        .section-break { height: 20px; }
+      </style>
+    </head>
+    <body>
+  `;
+  
+  // Per-activity reports
+  xlsContent += `<h2>PER ACTIVITY REPORTS</h2>`;
+  
+  for (const act of activities) {
+    const type = act.type;
+    const enrolled = students.filter((s) => (type === "CCA" ? s.cca : s.eca).includes(act.id));
+    
+    xlsContent += `<h3>${act.name} (${type})</h3>`;
+    xlsContent += `<p><strong>Days:</strong> ${act.days.join(", ")} | <strong>Time:</strong> ${act.time || "N/A"} | <strong>Venue:</strong> ${act.venue || "N/A"}${act.genderRestriction ? ` | <strong>Gender:</strong> ${act.genderRestriction === "F" ? "Girls only" : "Boys only"}` : ""}</p>`;
+    xlsContent += `<p><strong>Enrolled:</strong> ${enrolled.length} / ${act.capacity || "Unlimited"}</p>`;
+    
+    if (enrolled.length > 0) {
+      xlsContent += `<table><thead><tr><th>Nickname</th><th>Full Name</th><th>Class</th></tr></thead><tbody>`;
+      for (const s of enrolled) {
+        xlsContent += `<tr><td>${s.nickname || ""}</td><td>${s.name || ""}</td><td>${s.className || ""}</td></tr>`;
+      }
+      xlsContent += `</tbody></table>`;
+    } else {
+      xlsContent += `<p><em>No students enrolled yet.</em></p>`;
+    }
+    
+    xlsContent += `<div class="section-break"></div>`;
+  }
+  
+  // Per-class reports
+  xlsContent += `<h2>PER CLASS REPORTS</h2>`;
+  const classes = [...new Set(students.map((s) => s.className).filter(Boolean))].sort();
+  
+  for (const cls of classes) {
+    const classStudents = students.filter((s) => s.className === cls);
+    
+    xlsContent += `<h3>Class ${cls}</h3>`;
+    xlsContent += `<table><thead><tr><th>Nickname</th><th>Full Name</th><th>CCA with Location</th><th>ECA with Location</th></tr></thead><tbody>`;
+    
+    for (const s of classStudents) {
+      const ccaLocs = (s.cca || []).map((id) => {
+        const a = activities.find((x) => x.id === id);
+        return a ? `${a.name} (${a.venue || "N/A"})` : "?";
+      }).join(", ") || "None";
+      const ecaLocs = (s.eca || []).map((id) => {
+        const a = activities.find((x) => x.id === id);
+        return a ? `${a.name} (${a.venue || "N/A"})` : "?";
+      }).join(", ") || "None";
+      
+      xlsContent += `<tr><td>${s.nickname || ""}</td><td>${s.name || ""}</td><td>${ccaLocs}</td><td>${ecaLocs}</td></tr>`;
+    }
+    
+    xlsContent += `</tbody></table>`;
+    xlsContent += `<div class="section-break"></div>`;
+  }
+  
+  xlsContent += `</body></html>`;
+  
+  const blob = new Blob([xlsContent], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `clubboard_report_${new Date().toISOString().slice(0, 10)}.xls`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  toast("Report exported to XLS.");
 }
 
 // The activity grid buttons are bound by event delegation too.
