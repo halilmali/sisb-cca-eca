@@ -224,11 +224,31 @@ let roleUnsubscribes = [];
 
 async function initFirebase() {
   const { getDb } = await import("./firebase-init.js");
-  const { collection, onSnapshot } = await import("firebase/firestore");
   db = await getDb();
+}
 
-  // activities + seats are readable by every signed-in user. The students
-  // roster is role-scoped (see configureAccess) because it's private.
+/**
+ * Subscribe to the data this role is allowed to see, and stop any previous
+ * role-scoped subscriptions. Admins get the full students roster; students
+ * get only their own doc. Call whenever the signed-in role changes.
+ */
+export async function configureAccess(role, email) {
+  if (MODE !== "firebase") return;
+  // Drop role-scoped state from any previous session before re-subscribing,
+  // so a later user never sees (or reads via the console) stale roster data.
+  students = [];
+  myStudent = null;
+  for (const unsub of unsubscribes) unsub();
+  unsubscribes = [];
+  for (const unsub of roleUnsubscribes) unsub();
+  roleUnsubscribes = [];
+  if (!db) return;
+
+  const { collection, doc, onSnapshot } = await import("firebase/firestore");
+
+  // activities + seats are readable by every signed-in user. Set up these
+  // listeners here (after auth) instead of in initFirebase() to avoid
+  // "missing permissions" errors when the user isn't signed in yet.
   unsubscribes.push(
     onSnapshot(
       collection(db, "activities"),
@@ -247,24 +267,6 @@ async function initFirebase() {
       (err) => console.error("seats listener failed:", err)
     )
   );
-}
-
-/**
- * Subscribe to the data this role is allowed to see, and stop any previous
- * role-scoped subscriptions. Admins get the full students roster; students
- * get only their own doc. Call whenever the signed-in role changes.
- */
-export async function configureAccess(role, email) {
-  if (MODE !== "firebase") return;
-  // Drop role-scoped state from any previous session before re-subscribing,
-  // so a later user never sees (or reads via the console) stale roster data.
-  students = [];
-  myStudent = null;
-  for (const unsub of roleUnsubscribes) unsub();
-  roleUnsubscribes = [];
-  if (!db) return;
-
-  const { collection, doc, onSnapshot } = await import("firebase/firestore");
 
   if (role === "admin") {
     roleUnsubscribes.push(
