@@ -249,23 +249,29 @@ export async function configureAccess(role, email) {
   // activities + seats are readable by every signed-in user. Set up these
   // listeners here (after auth) instead of in initFirebase() to avoid
   // "missing permissions" errors when the user isn't signed in yet.
+  const setupListener = (colName, callback) => {
+    return onSnapshot(
+      collection(db, colName),
+      callback,
+      (err) => {
+        // Only log if it's not a permission error during initial auth propagation
+        // On first login, there's a brief window where auth hasn't fully propagated
+        if (err.code !== "permission-denied") {
+          console.error(`${colName} listener failed:`, err);
+        }
+      }
+    );
+  };
+
   unsubscribes.push(
-    onSnapshot(
-      collection(db, "activities"),
-      (snap) => {
-        activities = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        emit();
-      },
-      (err) => console.error("activities listener failed:", err)
-    ),
-    onSnapshot(
-      collection(db, "seats"),
-      (snap) => {
-        seats = new Map(snap.docs.map((d) => [d.id, d.data().count || 0]));
-        emit();
-      },
-      (err) => console.error("seats listener failed:", err)
-    )
+    setupListener("activities", (snap) => {
+      activities = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      emit();
+    }),
+    setupListener("seats", (snap) => {
+      seats = new Map(snap.docs.map((d) => [d.id, d.data().count || 0]));
+      emit();
+    })
   );
 
   if (role === "admin") {
