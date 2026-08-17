@@ -1,9 +1,11 @@
 // ============================================================================
 // ClubBoard — student dashboard
 // ============================================================================
-// A student picks at least one CCA and one ECA. The app blocks any selection
-// where a chosen CCA and a chosen ECA run on the same day of the week, and
-// live-validates capacity and the 1+1 minimum before saving.
+// A student picks at least two activities (any mix of CCAs and ECAs). The app
+// blocks any selection where a chosen CCA and a chosen ECA run on the same
+// day of the week, and live-validates capacity before saving. ECAs are
+// categorised as Athletics / Non-Athletics, and picking 2 ECAs requires at
+// least one to be Athletics. The pick lists are grouped by day of week.
 // ============================================================================
 import {
   getActivities,
@@ -12,7 +14,7 @@ import {
   saveChoices,
 } from "./store.js";
 import * as auth from "./auth.js";
-import { $, $$, esc, toast, dayChips, weekStrip, fmtDateTime } from "./ui.js";
+import { $, $$, esc, toast, dayChips, weekStrip, fmtDateTime, DAYS } from "./ui.js";
 
 export function mountStudentView() {
   const app = $("#app");
@@ -59,8 +61,9 @@ export function mountStudentView() {
         <div>
           <h1>Pick your clubs${me?.name ? `, ${esc(me.name.split(" ")[0])}` : ""} 🎒</h1>
           <p>
-            Choose <b>1–2 CCAs</b> and <b>1–2 ECAs</b>.
-            You can't pick a CCA and an ECA that run on the same day.
+            Choose <b>at least 2 activities</b> — any mix of CCAs and ECAs,
+            with up to 2 ECAs. You can't pick a CCA and an ECA that run on the
+            same day — and if you pick 2 ECAs, one must be <b>Athletics</b>.
           </p>
         </div>
         <div class="student-head__status">
@@ -80,21 +83,21 @@ export function mountStudentView() {
       <div id="validation-banner"></div>
 
       <div class="pick-cols">
-        <section class="pick-col">
+        <section class="pick-col" data-col="cca">
           <div class="pick-col__head">
             <span class="type-badge type-badge--cca">CCA</span>
-            <h2>Co-curricular <span class="muted">— pick 1 to 2</span></h2>
+            <h2>Co-curricular <span class="muted">— pick any number, listed by day</span></h2>
             <span class="count-pill" id="cca-count">0 chosen</span>
           </div>
-          ${renderPickList(ccaList, selectedCca, selectedEca, takeCount, "cca", studentGender)}
+          <div class="pick-list" id="pick-list-cca"></div>
         </section>
-        <section class="pick-col">
+        <section class="pick-col" data-col="eca">
           <div class="pick-col__head">
             <span class="type-badge type-badge--eca">ECA</span>
-            <h2>Extra-curricular <span class="muted">— pick 1 to 2</span></h2>
+            <h2>Extra-curricular <span class="muted">— pick 1 to 2, listed by day</span></h2>
             <span class="count-pill" id="eca-count">0 chosen</span>
           </div>
-          ${renderPickList(ecaList, selectedCca, selectedEca, takeCount, "eca", studentGender)}
+          <div class="pick-list" id="pick-list-eca"></div>
         </section>
       </div>
     </main>
@@ -108,8 +111,23 @@ export function mountStudentView() {
   $("#btn-signout").addEventListener("click", () => auth.logout());
 
   // ---- selection logic ----
+  const renderColumn = (type) => {
+    const el = $(`#pick-list-${type}`);
+    if (!el) return;
+    el.innerHTML = renderPickList(
+      type === "cca" ? ccaList : ecaList,
+      selectedCca,
+      selectedEca,
+      takeCount,
+      type,
+      studentGender
+    );
+    updateCardStates();
+    refresh();
+  };
+
   const refresh = () => {
-    const { clashDays, clashNames, ccaCount, ecaCount, full, ccaSameDayClash, ecaSameDayClash, genderViolations } = validate(
+    const { clashDays, clashNames, ccaCount, ecaCount, full, ccaSameDayClash, ecaSameDayClash, genderViolations, ecaAthletics } = validate(
       selectedCca,
       selectedEca,
       activities,
@@ -129,8 +147,9 @@ export function mountStudentView() {
     const ecaEl = $("#eca-count");
     if (ccaEl) ccaEl.textContent = `${ccaCount} chosen`;
     if (ecaEl) ecaEl.textContent = `${ecaCount} chosen`;
-    ccaEl && ccaEl.classList.toggle("count-pill--ok", ccaCount >= 1);
-    ecaEl && ecaEl.classList.toggle("count-pill--ok", ecaCount >= 1);
+    const totalOk = ccaCount + ecaCount >= 2;
+    ccaEl && ccaEl.classList.toggle("count-pill--ok", totalOk);
+    ecaEl && ecaEl.classList.toggle("count-pill--ok", totalOk);
 
     // validation banner
     const banner = $("#validation-banner");
@@ -140,6 +159,12 @@ export function mountStudentView() {
           <div class="alert alert--danger" role="alert">
             <strong>Gender restriction!</strong>
             You cannot join ${esc(genderViolations.join(", "))} because ${genderViolations.length > 1 ? "they are" : "it is"} restricted to ${genderViolations.every(v => activities.find(a => a.id === v)?.genderRestriction === "F") ? "girls" : "boys"}.
+          </div>`;
+      } else if (ecaAthletics.length) {
+        banner.innerHTML = `
+          <div class="alert alert--danger" role="alert">
+            <strong>Pick an Athletics ECA!</strong>
+            When you choose 2 ECAs, at least one must be an Athletics activity — you've picked ${esc(ecaAthletics.join(", "))}, none of which are Athletics.
           </div>`;
       } else if (ccaSameDayClash || ecaSameDayClash) {
         const clashInfo = ccaSameDayClash || ecaSameDayClash;
@@ -160,7 +185,7 @@ export function mountStudentView() {
           <div class="alert alert--warn" role="alert">
             <strong>Heads up:</strong> ${esc(full.join(", "))} ${full.length > 1 ? "are" : "is"} full.
           </div>`;
-      } else if (ccaCount >= 1 && ecaCount >= 1) {
+      } else if (ccaCount + ecaCount >= 2) {
         banner.innerHTML = `
           <div class="alert alert--ok" role="status">✓ Looks good — your clubs don't clash.</div>`;
       } else {
@@ -171,20 +196,17 @@ export function mountStudentView() {
     // savebar
     const status = $("#save-status");
     const saveBtn = $("#btn-save");
-    if (genderViolations.length || ccaSameDayClash || ecaSameDayClash || clashDays.length) {
+    if (ecaAthletics.length) {
+      status.textContent = "One of your 2 ECAs must be an Athletics activity.";
+      saveBtn.disabled = true;
+    } else if (genderViolations.length || ccaSameDayClash || ecaSameDayClash || clashDays.length) {
       status.textContent = "Fix the conflicts to save.";
       saveBtn.disabled = true;
-    } else if (ccaCount > 2 || ecaCount > 2) {
-      const over = [];
-      if (ccaCount > 2) over.push("2 CCAs");
-      if (ecaCount > 2) over.push("2 ECAs");
-      status.textContent = `You can pick at most ${over.join(" and ")}.`;
+    } else if (ecaCount > 2) {
+      status.textContent = "You can pick at most 2 ECAs.";
       saveBtn.disabled = true;
-    } else if (ccaCount < 1 || ecaCount < 1) {
-      const missing = [];
-      if (ccaCount < 1) missing.push("at least 1 CCA");
-      if (ecaCount < 1) missing.push("at least 1 ECA");
-      status.textContent = `Pick ${missing.join(" and ")} to save.`;
+    } else if (ccaCount + ecaCount < 2) {
+      status.textContent = "Pick at least 2 activities to save.";
       saveBtn.disabled = true;
     } else {
       status.textContent = `${ccaCount} CCA · ${ecaCount} ECA — ready to save.`;
@@ -205,8 +227,8 @@ export function mountStudentView() {
     if (set.has(id)) {
       set.delete(id);
     } else {
-      if (set.size >= 2) {
-        toast(`You can pick at most 2 ${type === "cca" ? "CCAs" : "ECAs"}.`, "error");
+      if (type === "eca" && set.size >= 2) {
+        toast("You can pick at most 2 ECAs.", "error");
         return;
       }
       set.add(id);
@@ -219,16 +241,16 @@ export function mountStudentView() {
     $$(".pick-card").forEach((card) => {
       const set = card.dataset.type === "cca" ? selectedCca : selectedEca;
       card.classList.toggle("is-selected", set.has(card.dataset.id));
-      // Once 2 of a type are picked, dim the remaining unselected cards so
+      // Once 2 ECAs are picked, dim the remaining unselected ECA cards so
       // the 1–2 cap is obvious (they still show the toast if clicked).
-      card.classList.toggle("is-capped", set.size >= 2 && !set.has(card.dataset.id));
+      card.classList.toggle("is-capped", card.dataset.type === "eca" && set.size >= 2 && !set.has(card.dataset.id));
     });
   };
 
   // save
   $("#btn-save").addEventListener("click", async () => {
-    const { clashDays, ccaCount, ecaCount, genderViolations, ccaSameDayClash, ecaSameDayClash } = validate(selectedCca, selectedEca, activities, takeCount, studentGender);
-    if (clashDays.length || ccaCount < 1 || ecaCount < 1 || genderViolations.length || ccaSameDayClash || ecaSameDayClash) {
+    const { clashDays, ccaCount, ecaCount, genderViolations, ccaSameDayClash, ecaSameDayClash, ecaAthletics } = validate(selectedCca, selectedEca, activities, takeCount, studentGender);
+    if (clashDays.length || ccaCount + ecaCount < 2 || genderViolations.length || ccaSameDayClash || ecaSameDayClash || ecaAthletics.length) {
       toast("Can't save — check the conflicts or minimum picks.", "error");
       return;
     }
@@ -240,7 +262,8 @@ export function mountStudentView() {
     }
   });
 
-  refresh();
+  renderColumn("cca");
+  renderColumn("eca");
 }
 
 // ---------------------------------------------------------------------------
@@ -257,50 +280,65 @@ function renderPickList(list, selectedCca, selectedEca, takeCount, type, student
   }
 
   const set = type === "cca" ? selectedCca : selectedEca;
+  const card = (a) => renderPickCard(a, set, takeCount, type, studentGender);
 
+  // Always grouped by day: each activity appears under every day it runs.
+  // All copies share the same selection state (same data-id), so clicking
+  // any copy toggles it everywhere.
+  const groups = DAYS.map((day) => {
+    const todays = list.filter((a) => a.days.includes(day));
+    return `
+      <section class="pick-day-group">
+        <h3 class="pick-day-group__head">
+          <span class="day-chip day-chip--on">${day}</span>
+          <span class="muted">${todays.length ? `${todays.length} ${todays.length === 1 ? "activity" : "activities"}` : "nothing runs this day"}</span>
+        </h3>
+        ${todays.length
+          ? `<div class="pick-grid">${todays.map(card).join("")}</div>`
+          : `<p class="pick-day-empty">No ${type === "cca" ? "CCAs" : "ECAs"} run on ${day}.</p>`}
+      </section>`;
+  }).join("");
+  return `<div class="pick-byday">${groups}</div>`;
+}
+
+function renderPickCard(a, set, takeCount, type, studentGender) {
+  const chosen = takeCount.get(a.id) || 0;
+  const isSelected = set.has(a.id);
+  const full = a.capacity > 0 && chosen >= a.capacity && !isSelected;
+  const spotsLeft = a.capacity > 0 ? a.capacity - chosen : null;
+  // Check gender restriction
+  const genderRestricted = studentGender && a.genderRestriction && a.genderRestriction !== studentGender;
+  const isWrongGender = genderRestricted && !isSelected;
+  const isAthletics = type === "eca" && (a.category || "").toLowerCase() === "athletics";
   return `
-    <div class="pick-grid">
-      ${list
-        .map((a) => {
-          const chosen = takeCount.get(a.id) || 0;
-          const isSelected = set.has(a.id);
-          const full = a.capacity > 0 && chosen >= a.capacity && !isSelected;
-          const spotsLeft = a.capacity > 0 ? a.capacity - chosen : null;
-          // Check gender restriction
-          const genderRestricted = studentGender && a.genderRestriction && a.genderRestriction !== studentGender;
-          const isWrongGender = genderRestricted && !isSelected;
-          return `
-            <button class="pick-card pick-card--${type} ${isSelected ? "is-selected" : ""} ${full ? "is-full" : ""} ${isWrongGender ? "is-gender-restricted" : ""}"
-              data-id="${esc(a.id)}" data-type="${type}" type="button"
-              ${full || isWrongGender ? "disabled" : ""}>
-              <span class="pick-card__check" aria-hidden="true">✓</span>
-              <div class="pick-card__top">
-                <strong>${esc(a.name)}</strong>
-                ${full ? '<span class="full-pill">Full</span>' : ""}
-                ${a.genderRestriction ? `<span class="type-badge type-badge--${a.genderRestriction === "F" ? "cca" : "eca"}" style="margin-left:6px;">${a.genderRestriction === "F" ? "Girls" : "Boys"}</span>` : ""}
-              </div>
-              ${a.description ? `<p class="pick-card__desc">${esc(a.description)}</p>` : ""}
-              <div class="day-chips">${dayChips(a.days)}</div>
-              <div class="pick-card__meta">
-                <span>🕒 ${esc(a.time || "—")}</span>
-                <span>📍 ${esc(a.venue || "—")}</span>
-              </div>
-              <div class="pick-card__spots ${full ? "spots--full" : ""}" style="font-size:1.05em;font-weight:700;">
-                ${
-                  full
-                    ? "Quota full — no spots left"
-                    : isWrongGender
-                    ? `Not available for your gender`
-                    : a.capacity > 0
-                    ? `<b style="font-size:1.2em">${spotsLeft}</b> of ${a.capacity} spots left`
-                    : "No quota limit"
-                }
-              </div>
-            </button>`;
-        })
-        .join("")}
-    </div>
-  `;
+    <button class="pick-card pick-card--${type} ${isSelected ? "is-selected" : ""} ${full ? "is-full" : ""} ${isWrongGender ? "is-gender-restricted" : ""}"
+      data-id="${esc(a.id)}" data-type="${type}" type="button"
+      ${full || isWrongGender ? "disabled" : ""}>
+      <span class="pick-card__check" aria-hidden="true">✓</span>
+      <div class="pick-card__top">
+        <strong>${esc(a.name)}</strong>
+        ${isAthletics ? '<span class="cat-pill cat-pill--athletics">Athletics</span>' : ""}
+        ${full ? '<span class="full-pill">Full</span>' : ""}
+        ${a.genderRestriction ? `<span class="type-badge type-badge--${a.genderRestriction === "F" ? "cca" : "eca"}" style="margin-left:6px;">${a.genderRestriction === "F" ? "Girls" : "Boys"}</span>` : ""}
+      </div>
+      ${a.description ? `<p class="pick-card__desc">${esc(a.description)}</p>` : ""}
+      <div class="day-chips">${dayChips(a.days)}</div>
+      <div class="pick-card__meta">
+        <span>🕒 ${esc(a.time || "—")}</span>
+        <span>📍 ${esc(a.venue || "—")}</span>
+      </div>
+      <div class="pick-card__spots ${full ? "spots--full" : ""}" style="font-size:1.05em;font-weight:700;">
+        ${
+          full
+            ? "Quota full — no spots left"
+            : isWrongGender
+            ? "Not available for you"
+            : a.capacity > 0
+            ? `<b style="font-size:1.2em">${spotsLeft}</b> of ${a.capacity} spots left`
+            : "No quota limit"
+        }
+      </div>
+    </button>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -345,6 +383,12 @@ function validate(selectedCca, selectedEca, activities, takeCount, studentGender
     if (a && a.capacity > 0 && (takeCount.get(id) || 0) >= a.capacity) full.push(a.name);
   });
 
+  // ECA Athletics rule: exactly 2 ECAs => at least one must be Athletics.
+  const ecaAthletics =
+    ecaActs.length === 2 && !ecaActs.some((a) => (a.category || "").toLowerCase() === "athletics")
+      ? ecaActs.map((a) => a.name)
+      : [];
+
   return {
     clashDays,
     clashNames,
@@ -354,6 +398,7 @@ function validate(selectedCca, selectedEca, activities, takeCount, studentGender
     ccaSameDayClash,
     ecaSameDayClash,
     genderViolations,
+    ecaAthletics,
   };
 }
 

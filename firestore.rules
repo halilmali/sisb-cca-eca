@@ -17,6 +17,15 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------
+    // Helper: is the given activity id an "Athletics" ECA?
+    // Used to enforce the rule that 2 ECAs must include an Athletics one.
+    // ------------------------------------------------------------------
+    function isAthleticsEca(activityId) {
+      return exists(/databases/$(database)/documents/activities/$(activityId)) &&
+        get(/databases/$(database)/documents/activities/$(activityId)).data.category == "Athletics";
+    }
+
+    // ------------------------------------------------------------------
     // admins collection: only the Firebase console / Admin SDK may write.
     // To make yourself admin: create a document with ID = your email.
     // ------------------------------------------------------------------
@@ -40,8 +49,8 @@ service cloud.firestore {
     // their own document. The app's student view reads the `seats`
     // collection for "spots left" instead of other students' docs.
     // - a student may update only their OWN document, only the fields
-    //   the app writes, and must keep at least 1 CCA and 1 ECA whenever
-    //   they submit/change choices (admins may still clear choices)
+    //   the app writes, and must keep at least 2 activities in total
+    //   whenever they submit/change choices (admins may still clear choices)
     // - admins may do everything (add students, view, reset choices)
     // ------------------------------------------------------------------
     match /students/{email} {
@@ -53,18 +62,23 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "cca", "eca", "submittedAt", "name", "className", "email"
         ]) &&
-        // "Choose 1 to 2 CCAs and 1 to 2 ECAs" — enforced server-side
-        // whenever the choice fields change (name-only syncs are unaffected).
-        // The `is list` guards reject type-confusion writes (e.g. a string).
+        // "At least 2 activities in any mix, with at most 2 ECAs" — enforced
+        // server-side whenever the choice fields change (name-only syncs are
+        // unaffected). The `is list` guards reject type-confusion writes
+        // (e.g. a string). Picking 2 ECAs also requires at least one to be an
+        // Athletics ECA (the app writes `category` on ECA activities).
         (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(["cca", "eca"]) ||
           (
             request.resource.data.cca is list &&
             request.resource.data.eca is list &&
-            request.resource.data.cca.size() >= 1 &&
-            request.resource.data.cca.size() <= 2 &&
-            request.resource.data.eca.size() >= 1 &&
-            request.resource.data.eca.size() <= 2
+            request.resource.data.cca.size() + request.resource.data.eca.size() >= 2 &&
+            request.resource.data.eca.size() <= 2 &&
+            (
+              request.resource.data.eca.size() != 2 ||
+              isAthleticsEca(request.resource.data.eca[0]) ||
+              isAthleticsEca(request.resource.data.eca[1])
+            )
           )
         )
       );

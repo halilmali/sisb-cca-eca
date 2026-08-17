@@ -18,16 +18,23 @@
 ## Current feature set (all working)
 
 - **Admins** (Google sign-in; `admins/{lowercase-email}` doc = admin):
-  manage activities (CCA/ECA, days, time, venue, quota, description), manage
-  students (add by email/bulk, view choices, **edit choices**, reset, delete).
-- **Students**: pick **1–2 CCAs and 1–2 ECAs**; day-clash protection; quota
-  "full" states; spots-left display; save.
+  manage activities (CCA/ECA, days, time, venue, quota, description, ECA
+  category), **bulk-upload activities from CSV**, manage students (add by
+  email/bulk, view choices, **edit choices**, reset, delete).
+- **Students**: pick **at least 2 activities in any mix** (max 2 ECAs);
+  day-clash protection; **Athletics rule** (2 ECAs must include one Athletics
+  ECA); quota "full" states; spots-left display; picker lists activities
+  **by day**; save.
 - **Quotas**: `capacity` per activity (0 = unlimited). Enforced live in the UI
   and **atomically** in a Firestore transaction via `seats/{activityId}`
   counter docs. `setStudentChoices` (admin edit) keeps counters in sync and
   rejects assigning to a full club.
-- **1–2 cap**: UI blocks a 3rd pick; `saveChoices` validates; `firestore.rules`
-  enforces min 1 / max 2 for student saves (with `is list` type guards).
+- **Choice limits**: at least 2 activities total in any mix; CCAs unlimited;
+  ECAs capped at 2, and 2 ECAs must include an **Athletics** ECA (category
+  field on ECA activities). UI blocks a 3rd ECA / non-Athletics pair / <2
+  total; `saveChoices` / `setStudentChoices` validate; `firestore.rules`
+  enforces min 2 total / max 2 ECAs + the Athletics rule for student saves
+  (with `is list` type guards).
 - **Roster privacy**: only admins can list `students`; a student reads only
   their own doc. The student view gets "spots left" from the `seats` collection.
 - **Demo mode**: replace the `js/config.js` values with `YOUR_...` placeholders
@@ -63,10 +70,11 @@ The user has a real Firebase project (`sisb-cca-eca`) and config is in
 ## Verified in browser tests (playwright-cli)
 
 - Admin add/edit/delete activity; add/remove students; reset choices.
-- Student save, day-clash banner, quota-full blocking, 1–2 cap + toast,
-  capped-card dimming.
+- Student save, day-clash banner, quota-full blocking, 2-ECA cap + toast,
+  capped-card dimming, Athletics-rule banner, by-day picker view (only view).
 - Admin "Edit choices" modal: cap, full-club disabled, clash warning,
-  seat-counter sync, quota rejection on full club.
+  Athletics-rule warning, seat-counter sync, quota rejection on full club.
+- Admin bulk activity upload (template download, CSV parse, duplicate skip).
 - Session persistence across reload (demo auth restore).
 
 ## How to resume in a new session
