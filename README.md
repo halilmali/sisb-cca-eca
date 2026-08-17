@@ -3,7 +3,7 @@
 A simple, self-hosted club choice portal for schools. Built with plain **HTML, CSS & JavaScript**
 (no build tools) and **Firebase** (Auth + Firestore).
 
-- **Students** sign in with their Google account and pick **1–2 CCAs and 1–2 ECAs**.
+- **Students** sign in with their Google account and pick **at least 2 activities in any mix** (e.g. 2 ECAs, 2+ CCAs, or 1 of each) — max 2 ECAs, and 2 ECAs must include an **Athletics** ECA. The picker lists every activity **by day of the week**.
 - The system **blocks any CCA/ECA pair that runs on the same day** (day-clash rule).
 - **Admins** (Google sign-in, identified by email) manage activities and the student roster — including **editing any student's CCA/ECA choices directly** (with quota-safe seat bookkeeping).
 - **Quotas**: each activity has a max-student quota set by the admin. When a club is full, students **cannot** choose it — enforced live in the UI **and** atomically in Firestore (race-free).
@@ -71,7 +71,7 @@ Sign in with that Google account and you'll see the admin dashboard.
 
 ### 6. Add your students
 
-In the admin **Students** tab, add students by email (one or many at a time). Each row also offers **View** (see their choices), **Edit choices** (set their CCAs/ECAs for them, respecting the 1–2 limit and quotas), **Reset** (clear their choices and release seats), and **Delete**.
+In the admin **Students** tab, add students by email (one or many at a time). Each row also offers **View** (see their choices), **Edit choices** (set their CCAs/ECAs for them, respecting the at-least-1-CCA / max-2-ECA rule and quotas), **Reset** (clear their choices and release seats), and **Delete**.
 Students sign in with their school Google account; the app matches them by email
 and pulls their display name from Google automatically.
 
@@ -83,7 +83,7 @@ and pulls their display name from Google automatically.
 
 | Collection  | Document ID        | Shape                                                                    |
 | ----------- | ------------------ | ------------------------------------------------------------------------ |
-| `activities`| auto               | `{ name, type: "CCA"\|"ECA", days: ["Mon",...], time, venue, capacity (quota), description }` |
+| `activities`| auto               | `{ name, type: "CCA"\|"ECA", days: ["Mon",...], time, venue, capacity (quota), description, category: "Athletics"\|"Non-Athletics"\|null (ECAs only) }` |
 | `students`  | student email      | `{ email, name, className, cca: [actId...], eca: [actId...], submittedAt }` |
 | `seats`     | activity id        | `{ count }` — live quota counter per activity (kept by the save transaction) |
 | `admins`    | admin email        | `{ addedAt }` — presence means admin                                     |
@@ -106,11 +106,26 @@ combined into a set of days, and their chosen ECAs into another set. If the two
 sets overlap, the app refuses to save and shows exactly which days clash and
 which clubs cause it.
 
+### ECA categories & the Athletics rule
+
+Every ECA is categorised as **Athletics** or **Non-Athletics** (CCAs have no
+category). If a student picks **2 ECAs**, at least one of them must be an
+Athletics activity — enforced live in the student picker, in `saveChoices` /
+`setStudentChoices`, and server-side in `firestore.rules`.
+
+### Bulk activity upload
+
+Admins can add many activities at once from the Activities panel (**Bulk
+upload**): download the CSV template, fill it in (or load a file), and paste it
+back. Columns: `name, type, days, time, venue, capacity, description, category,
+gender`. Every row adds a new activity; rows with duplicate names or invalid
+fields are skipped and reported.
+
 ### Roles
 
 - **Admin** — email exists in `admins/{email}`. Manages activities & students,
   views/resets/deletes any student's choices.
-- **Student** — email exists in `students/{email}`. Picks **1–2 CCAs and 1–2 ECAs**.
+- **Student** — email exists in `students/{email}`. Picks **at least 2 activities in any mix** (max 2 ECAs; one must be Athletics when 2 ECAs are picked).
 - **Anyone else** — sees a "not on the list" screen.
 
 ---
@@ -154,7 +169,8 @@ What the shipped `firestore.rules` enforce:
   student can read **only their own document**. The student view shows "spots
   left" from the `seats` collection, not from other students' docs.
 - **Choice limits** — a student's save is rejected server-side unless they keep
-  **1–2 CCAs and 1–2 ECAs** whenever the choice fields change.
+  **at least 2 activities in total** (any mix), at most 2 ECAs, and — when 2
+  ECAs are picked — an **Athletics** activity.
 - **Quotas** — enforced atomically by the app's Firestore transaction
   (reads `seats/{activityId}` counters against `capacity`), so two students
   can't grab the last spot at once.

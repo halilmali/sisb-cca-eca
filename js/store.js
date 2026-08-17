@@ -10,7 +10,8 @@
 // Firestore layout
 //   activities/{autoId}   { name, type: "CCA"|"ECA", days: ["Mon",...],
 //                           time, venue, capacity, description, createdAt,
-//                           genderRestriction?: "F"|"M"|null }
+//                           genderRestriction?: "F"|"M"|null,
+//                           category?: "Athletics"|"Non-Athletics"|null (ECAs only) }
 //   students/{email}      { email, name, nickname, className, gender: "M"|"F",
 //                           cca: [actId...], eca: [actId...], submittedAt }
 //   admins/{email}        { addedAt }   // doc exists  => user is admin
@@ -134,6 +135,7 @@ const DEMO_ACTIVITIES = [
     capacity: 20,
     description: "From pawn to grandmaster.",
     genderRestriction: null,
+    category: "Non-Athletics",
   },
   {
     name: "Art Studio",
@@ -144,6 +146,7 @@ const DEMO_ACTIVITIES = [
     capacity: 18,
     description: "Painting, sketching, and sculpture.",
     genderRestriction: null,
+    category: "Non-Athletics",
   },
   {
     name: "Coding Club",
@@ -154,6 +157,18 @@ const DEMO_ACTIVITIES = [
     capacity: 15,
     description: "Learn to build things with code.",
     genderRestriction: null,
+    category: "Non-Athletics",
+  },
+  {
+    name: "Track & Field",
+    type: "ECA",
+    days: ["Tue", "Thu"],
+    time: "3:00 PM – 4:30 PM",
+    venue: "Stadium",
+    capacity: 30,
+    description: "Sprint, jump, throw — all levels welcome.",
+    genderRestriction: null,
+    category: "Athletics",
   },
 ];
 
@@ -174,7 +189,7 @@ function demoSeed() {
         className: "7A",
         gender: "M",
         cca: ["demo-act-1"],
-        eca: ["demo-act-4"],
+        eca: ["demo-act-5"],
         submittedAt: Date.now() - 86400000,
       },
       {
@@ -308,7 +323,7 @@ export async function initStore() {
 /** Add a new CCA or ECA activity. */
 export async function addActivity(data) {
   if (MODE === "demo") {
-    const id = `demo-act-${Date.now()}`;
+    const id = `demo-act-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     demoDb.activities.push({ id, createdAt: Date.now(), ...data });
     saveDemo();
     return id;
@@ -446,6 +461,7 @@ export async function deleteStudent(email) {
 export async function saveChoices(email, ccaIds, ecaIds) {
   const key = String(email).toLowerCase();
   assertChoiceLimits(ccaIds, ecaIds);
+  assertEcaAthleticsRule(ecaIds);
   if (MODE === "demo") {
     const s = demoDb.students.find((x) => x.email === key);
     if (!s) throw new Error("You're not on the club list yet.");
@@ -516,15 +532,16 @@ export async function saveChoices(email, ccaIds, ecaIds) {
 }
 
 /**
- * Admin-only: set a student's choices directly (max 2 CCAs and 2 ECAs).
- * Keeps the seat counters and quotas in sync — assigning a student to a club
- * that is already at capacity is rejected, exactly like a student save.
- * Admins may also leave a type empty (equivalent to a reset for that type).
+ * Admin-only: set a student's choices directly (at least 2 activities total,
+ * unlimited CCAs, max 2 ECAs). Keeps the seat counters and quotas in sync —
+ * assigning a student to a club that is already at capacity is rejected,
+ * exactly like a student save.
  */
 export async function setStudentChoices(email, ccaIds, ecaIds) {
   const key = String(email).toLowerCase();
-  if (ccaIds.length > 2) throw new Error("A student can have at most 2 CCAs.");
+  if (ccaIds.length + ecaIds.length < 2) throw new Error("A student must pick at least 2 activities.");
   if (ecaIds.length > 2) throw new Error("A student can have at most 2 ECAs.");
+  assertEcaAthleticsRule(ecaIds);
 
   if (MODE === "demo") {
     const s = demoDb.students.find((x) => x.email === key);
@@ -682,15 +699,27 @@ export function resetDemoData() {
 // ---------------------------------------------------------------------------
 
 /**
- * Each student must pick between 1 and 2 CCAs and 1 and 2 ECAs.
- * Mirrors the firestore.rules check; gives users a clean message instead of
- * a rules-denied error, and guards the demo-mode path too.
+ * Each student must pick at least 2 activities in total (any mix of CCAs and
+ * ECAs), with at most 2 ECAs. Mirrors the firestore.rules check; gives users
+ * a clean message instead of a rules-denied error, and guards the demo-mode
+ * path too.
  */
 function assertChoiceLimits(ccaIds, ecaIds) {
-  if (ccaIds.length < 1) throw new Error("Pick at least 1 CCA.");
-  if (ecaIds.length < 1) throw new Error("Pick at least 1 ECA.");
-  if (ccaIds.length > 2) throw new Error("You can pick at most 2 CCAs.");
+  if (ccaIds.length + ecaIds.length < 2) throw new Error("Pick at least 2 activities.");
   if (ecaIds.length > 2) throw new Error("You can pick at most 2 ECAs.");
+}
+
+/**
+ * ECA Athletics rule: when a student picks exactly 2 ECAs, at least one of
+ * them must be an "Athletics" activity. Mirrors the firestore.rules check.
+ */
+function assertEcaAthleticsRule(ecaIds) {
+  if (ecaIds.length !== 2) return;
+  const acts = ecaIds.map((id) => getActivity(id)).filter(Boolean);
+  const hasAthletics = acts.some((a) => (a.category || "").toLowerCase() === "athletics");
+  if (!hasAthletics) {
+    throw new Error("When you pick 2 ECAs, at least one must be an Athletics activity.");
+  }
 }
 
 // ---------------------------------------------------------------------------
