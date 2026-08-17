@@ -1732,3 +1732,62 @@ button {
 .table--compact td {
   padding: 0.5rem 0.75rem;
 }
+
+/* ---------------------------------------------------------------------------
+   ECA categories, by-day picker view, bulk-upload helpers
+   --------------------------------------------------------------------------- */
+
+/* Generic visibility helper (used to hide the admin activity category field) */
+.is-hidden {
+  display: none !important;
+}
+
+/* Athletics category pill */
+.cat-pill {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  background: var(--eca-soft);
+  color: var(--eca);
+  border: 1px solid color-mix(in srgb, var(--eca) 35%, transparent);
+}
+
+/* By-day grouping in the student picker */
+.pick-byday {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.pick-day-group__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+  margin-bottom: 10px;
+}
+
+.pick-day-group__head .day-chip--on {
+  font-size: 0.8rem;
+}
+
+.pick-day-empty {
+  color: var(--ink-3);
+  font-size: 0.85rem;
+  margin: 0;
+  padding: 8px 2px;
+}
+
+/* Bulk-upload modal toolbar */
+.modal__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
