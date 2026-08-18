@@ -442,19 +442,26 @@ button {
 
 .day-chips {
   display: flex;
-  gap: 5px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin: 10px 0;
+  margin: 12px 0;
+  justify-content: center;
 }
 
 .day-chip {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.95rem;
+  font-weight: 600;
   color: var(--ink-3);
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 2px 7px;
+  border-radius: 8px;
+  padding: 6px 14px;
+  min-width: 45px;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .day-chip--on {
@@ -1767,13 +1774,20 @@ button {
 .pick-day-group__head {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
-  font-size: 0.95rem;
-  margin-bottom: 10px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 14px;
 }
 
 .pick-day-group__head .day-chip--on {
-  font-size: 0.8rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 8px 24px;
+  text-align: center;
+  min-width: 140px;
+  justify-content: center;
 }
 
 .pick-day-empty {
