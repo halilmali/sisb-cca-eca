@@ -2,7 +2,29 @@
 // ClubBoard — UI helpers: toasts, modals, confirms, day chips, small utils
 // ============================================================================
 
-export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+export const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+
+// Activities may store short ("Mon") or full ("Monday") day names depending
+// on when/how they were created. Normalize everything to the full names used
+// by DAYS so both formats display and match consistently.
+const DAY_ALIAS = {
+  Mon: "Monday", "Mon.": "Monday", Monday: "Monday",
+  Tue: "Tuesday", Tues: "Tuesday", Tuesday: "Tuesday",
+  Wed: "Wednesday", Wednesday: "Wednesday",
+  Thu: "Thursday", Thur: "Thursday", Thurs: "Thursday", Thursday: "Thursday",
+  Fri: "Friday", Friday: "Friday",
+  Sat: "Saturday", Saturday: "Saturday",
+  Sun: "Sunday", Sunday: "Sunday",
+};
+
+export function normDay(day) {
+  const key = String(day ?? "").trim();
+  return DAY_ALIAS[key] || key;
+}
+
+export function normDays(days) {
+  return (days || []).map(normDay);
+}
 
 export function $ (selector, root = document) {
   return root.querySelector(selector);
@@ -161,16 +183,17 @@ export function confirmDialog({
 
 /** Render a row of day chips for an activity. */
 export function dayChips(days = []) {
+  const norm = normDays(days);
   return DAYS.map(
     (d) =>
-      `<span class="day-chip ${days.includes(d) ? "day-chip--on" : ""}">${d}</span>`
+      `<span class="day-chip ${norm.includes(d) ? "day-chip--on" : ""}">${d}</span>`
   ).join("");
 }
 
 /** Render a mini "week strip" for the student header showing chosen days. */
 export function weekStrip(activityDays) {
   // activityDays: array of day names chosen (flattened from selections)
-  const chosen = new Set(activityDays || []);
+  const chosen = new Set(normDays(activityDays));
   return `
     <div class="week-strip" role="img" aria-label="Days your clubs meet">
       ${DAYS.map(

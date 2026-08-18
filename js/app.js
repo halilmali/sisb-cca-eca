@@ -76,12 +76,12 @@ function renderLogin() {
           <div class="sample-card">
             <span class="type-badge type-badge--cca">CCA</span>
             <strong>Basketball</strong>
-            <div class="sample-days"><span class="day-chip day-chip--on">Mon</span><span class="day-chip day-chip--on">Wed</span></div>
+            <div class="sample-days"><span class="day-chip day-chip--on">Monday</span><span class="day-chip day-chip--on">Wednesday</span></div>
           </div>
           <div class="sample-card">
             <span class="type-badge type-badge--eca">ECA</span>
             <strong>Chess Club</strong>
-            <div class="sample-days"><span class="day-chip day-chip--on">Tue</span></div>
+            <div class="sample-days"><span class="day-chip day-chip--on">Tuesday</span></div>
           </div>
           <p class="sample-ok">✓ No day overlap — both fit in your week.</p>
         </div>

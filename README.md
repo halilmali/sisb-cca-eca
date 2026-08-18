@@ -83,7 +83,7 @@ and pulls their display name from Google automatically.
 
 | Collection  | Document ID        | Shape                                                                    |
 | ----------- | ------------------ | ------------------------------------------------------------------------ |
-| `activities`| auto               | `{ name, type: "CCA"\|"ECA", days: ["Mon",...], time, venue, capacity (quota), description, category: "Athletics"\|"Non-Athletics"\|null (ECAs only) }` |
+| `activities`| auto               | `{ name, type: "CCA"\|"ECA", days: ["Monday",...] (short names like "Mon" also accepted and normalized), time, venue, capacity (quota), description, category: "Athletics"\|"Non-Athletics"\|null (ECAs only) }` |
 | `students`  | student email      | `{ email, name, className, cca: [actId...], eca: [actId...], submittedAt }` |
 | `seats`     | activity id        | `{ count }` — live quota counter per activity (kept by the save transaction) |
 | `admins`    | admin email        | `{ addedAt }` — presence means admin                                     |

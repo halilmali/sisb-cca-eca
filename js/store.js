@@ -17,6 +17,7 @@
 //   admins/{email}        { addedAt }   // doc exists  => user is admin
 // ============================================================================
 import { isConfigured } from "./config.js";
+import { normDays } from "./ui.js";
 
 export const MODE = isConfigured ? "firebase" : "demo";
 
@@ -42,7 +43,10 @@ export function subscribe(callback) {
 export function getActivities() {
   // In demo mode mutations may replace the array (filter/delete), so read
   // from the live demoDb rather than a possibly-stale module-level reference.
-  return MODE === "demo" ? (demoDb ? demoDb.activities : []) : activities;
+  const list = MODE === "demo" ? (demoDb ? demoDb.activities : []) : activities;
+  // Normalize day names to full names ("Mon" -> "Monday") so activities
+  // stored under either format display and match consistently.
+  return list.map((a) => ({ ...a, days: normDays(a.days) }));
 }
 
 export function getStudents() {

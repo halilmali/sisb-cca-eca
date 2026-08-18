@@ -18,7 +18,7 @@ import {
   setStudentChoices,
 } from "./store.js";
 import * as auth from "./auth.js";
-import { $, $$, esc, toast, openModal, closeModal, confirmDialog, dayChips, DAYS, fmtDate, numOrZero } from "./ui.js";
+import { $, $$, esc, toast, openModal, closeModal, confirmDialog, dayChips, DAYS, fmtDate, numOrZero, normDay } from "./ui.js";
 
 let activeTab = "activities";
 let searchQuery = "";
@@ -476,7 +476,9 @@ function parseActivityRow(row) {
   if (t !== "CCA" && t !== "ECA") return fail(`"${name}": type must be CCA or ECA`);
   const dayList = (days || "").split(",").map((d) => d.trim()).filter(Boolean);
   if (!dayList.length) return fail(`"${name}": missing days`);
-  if (dayList.some((d) => !DAYS.includes(d))) return fail(`"${name}": unknown day`);
+  // Accept short ("Mon") or full ("Monday") names; store the full names.
+  const canonicalDays = dayList.map(normDay);
+  if (canonicalDays.some((d) => !DAYS.includes(d))) return fail(`"${name}": unknown day`);
   const cap = capacity === undefined || capacity === "" ? 0 : Number(capacity);
   if (Number.isNaN(cap) || cap < 0) return fail(`"${name}": invalid capacity`);
   const cat = (category || "").trim().toLowerCase();
@@ -485,7 +487,7 @@ function parseActivityRow(row) {
     data: {
       name: name.trim(),
       type: t,
-      days: dayList,
+      days: canonicalDays,
       time: (time || "").trim(),
       venue: (venue || "").trim(),
       capacity: cap,
