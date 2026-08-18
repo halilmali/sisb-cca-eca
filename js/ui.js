@@ -2,7 +2,7 @@
 // ClubBoard — UI helpers: toasts, modals, confirms, day chips, small utils
 // ============================================================================
 
-export const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+export const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
 export function $ (selector, root = document) {
   return root.querySelector(selector);
