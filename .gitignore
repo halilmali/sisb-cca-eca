@@ -1,7 +1,49 @@
-(js/store.js is just a source file, no build artifacts, dependencies, or temp files in the changes)
-(js/store.js is a source file, and there are no build artifacts, dependencies, or temp files in the changes)
-
-```javascript
-
 ```
-(js/admin.js is just a source file modification, no build artifacts, dependencies, or temp files in the changes)
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Editors
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+.env
+.env.local
+.env.*
+
+# Build outputs
+dist/
+build/
+*.min.js
+*.min.css
+coverage/
+htmlcov/
+.coverage
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.nyc_output/
+coverage/
+```

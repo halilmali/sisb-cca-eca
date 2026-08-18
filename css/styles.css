@@ -442,19 +442,23 @@ button {
 
 .day-chips {
   display: flex;
-  gap: 5px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin: 10px 0;
+  margin: 12px 0;
+  justify-content: center;
 }
 
 .day-chip {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.95rem;
+  font-weight: 600;
   color: var(--ink-3);
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 2px 7px;
+  border-radius: 8px;
+  padding: 6px 14px;
+  min-width: 45px;
+  text-align: center;
 }
 
 .day-chip--on {
