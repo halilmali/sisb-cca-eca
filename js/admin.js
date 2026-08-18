@@ -74,6 +74,7 @@ export function mountAdminView() {
       <section class="panel ${activeTab === "activities" ? "" : "is-hidden"}" data-panel="activities">
         <div class="panel__toolbar">
           <h2>Activities <span class="muted">(${ccaCount} CCA · ${ecaCount} ECA)</span></h2>
+          <button class="btn btn--secondary" id="btn-bulk-activities">⬆ Bulk upload</button>
           <button class="btn btn--primary" id="btn-add-activity">+ Add activity</button>
         </div>
         ${renderActivityGrid(activities, students)}
@@ -115,6 +116,7 @@ export function mountAdminView() {
 
   $("#btn-signout").addEventListener("click", () => auth.logout());
   $("#btn-add-activity").addEventListener("click", () => openActivityModal());
+  $("#btn-bulk-activities").addEventListener("click", () => openBulkActivitiesModal());
   const emptyAddActivity = $("#empty-add-activity");
   if (emptyAddActivity) emptyAddActivity.addEventListener("click", () => openActivityModal());
   $("#btn-add-student").addEventListener("click", () => openStudentsModal());
@@ -171,6 +173,7 @@ function renderActivityGrid(activities, students) {
         <div class="act-card__top">
           <span class="type-badge type-badge--${a.type.toLowerCase()}" style="display:flex;align-items:center;gap:6px;">
             ${a.type}
+            ${a.category === "Athletics" ? '<span style="opacity:0.6">·</span>Athletics' : ""}
             ${genderBadge ? `<span style="opacity:0.6">·</span>${genderBadge}` : ""}
           </span>
           <div class="act-card__actions">
@@ -207,6 +210,13 @@ function openActivityModal(activity = null) {
         <div class="seg" id="type-seg">
           <button type="button" class="seg__opt ${(a.type || "CCA") === "CCA" ? "is-on" : ""}" data-type="CCA">CCA</button>
           <button type="button" class="seg__opt ${a.type === "ECA" ? "is-on" : ""}" data-type="ECA">ECA</button>
+        </div>
+      </div>
+      <div class="field is-hidden" id="category-field">
+        <span>Category <em class="muted">(ECAs only — 2 ECAs must include one Athletics)</em></span>
+        <div class="seg" id="category-seg">
+          <button type="button" class="seg__opt ${(a.category || "Non-Athletics") === "Athletics" ? "is-on" : ""}" data-category="Athletics">Athletics</button>
+          <button type="button" class="seg__opt ${(a.category || "Non-Athletics") !== "Athletics" ? "is-on" : ""}" data-category="Non-Athletics">Non-Athletics</button>
         </div>
       </div>
       <div class="field">
@@ -248,17 +258,33 @@ function openActivityModal(activity = null) {
     onMount: (overlay) => {
       let type = a.type || "CCA";
       let genderRestriction = a.genderRestriction || "";
+      let category = a.category || "Non-Athletics";
+      const syncSeg = (opt) => {
+        opt.closest(".seg").querySelectorAll(".seg__opt").forEach((o) => o.classList.toggle("is-on", o === opt));
+      };
+      const categoryField = $("#category-field", overlay);
+      const showCategoryField = () => {
+        if (categoryField) categoryField.classList.toggle("is-hidden", type !== "ECA");
+      };
+      showCategoryField();
       $("#type-seg", overlay).addEventListener("click", (e) => {
         const opt = e.target.closest(".seg__opt");
         if (!opt) return;
         type = opt.dataset.type;
-        $$(".seg__opt", overlay).forEach((o) => o.classList.toggle("is-on", o === opt));
+        syncSeg(opt);
+        showCategoryField();
       });
       $("#gender-restriction-seg", overlay).addEventListener("click", (e) => {
         const opt = e.target.closest(".seg__opt");
         if (!opt) return;
         genderRestriction = opt.dataset.gender;
-        $$(".seg__opt", overlay).forEach((o) => o.classList.toggle("is-on", o === opt));
+        syncSeg(opt);
+      });
+      $("#category-seg", overlay).addEventListener("click", (e) => {
+        const opt = e.target.closest(".seg__opt");
+        if (!opt) return;
+        category = opt.dataset.category;
+        syncSeg(opt);
       });
       $$(".day-opt", overlay).forEach((btn) =>
         btn.addEventListener("click", () => btn.classList.toggle("is-on"))
@@ -281,6 +307,7 @@ function openActivityModal(activity = null) {
           capacity: numOrZero(fd.get("capacity")),
           genderRestriction: genderRestriction || null,
           description: fd.get("description").trim(),
+          category: type === "ECA" ? category : null,
         };
         try {
           if (editing) await updateActivity(a.id, data);
@@ -293,6 +320,180 @@ function openActivityModal(activity = null) {
       });
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Bulk activity upload
+// ---------------------------------------------------------------------------
+function openBulkActivitiesModal() {
+  const bodyHtml = `
+    <div class="modal__toolbar">
+      <button type="button" class="btn btn--secondary btn--sm" id="btn-download-template">⬇ Download template (CSV)</button>
+      <label class="btn btn--ghost btn--sm" style="cursor:pointer;">📄 Load from file<input type="file" id="bulk-file" accept=".csv,.txt,text/csv" hidden></label>
+    </div>
+    <div class="field">
+      <span>Spreadsheet paste — columns: name, type (CCA/ECA), days ("Mon,Wed"), time, venue, capacity (0 = unlimited), description, category (Athletics/Non-Athletics — ECAs only), gender (blank/F/M)</span>
+      <textarea name="bulk" id="bulk-activities" rows="10" placeholder="Basketball,CCA,&quot;Mon,Wed&quot;,3:00 PM – 4:30 PM,Main Gym,20,Shoot hoops and build teamwork,,&#10;Track &amp; Field,ECA,&quot;Tue,Thu&quot;,3:00 PM – 4:30 PM,Stadium,30,Run fast — all levels welcome,Athletics,"></textarea>
+    </div>
+    <p class="field__note">Every row adds a new activity. Rows with a name that already exists, or a missing/invalid required field, are skipped and reported.</p>
+  `;
+
+  openModal({
+    title: "Bulk upload activities",
+    bodyHtml,
+    actions: [
+      { label: "Cancel", variant: "ghost" },
+      { label: "Add activities", variant: "primary", submit: true, form: "bulk-activities-form", onClick: () => false },
+    ],
+    onMount: (overlay) => {
+      overlay.querySelector("#btn-download-template").addEventListener("click", downloadActivityTemplate);
+      const fileInput = overlay.querySelector("#bulk-file");
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          overlay.querySelector("#bulk-activities").value = reader.result;
+          toast("File loaded — review it, then submit.");
+        };
+        reader.readAsText(file);
+      });
+
+      const form = document.createElement("form");
+      form.id = "bulk-activities-form";
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const rows = parseCsv(overlay.querySelector("#bulk-activities").value);
+        if (!rows.length) {
+          toast("Paste at least one activity row first.", "error");
+          return;
+        }
+        const existing = new Set(getActivities().map((a) => a.name.toLowerCase()));
+        let added = 0;
+        let skipped = 0;
+        for (const row of rows) {
+          const parsed = parseActivityRow(row);
+          if (parsed.error) {
+            skipped++;
+            continue;
+          }
+          const nameKey = parsed.data.name.toLowerCase();
+          if (existing.has(nameKey)) {
+            skipped++;
+            continue;
+          }
+          existing.add(nameKey);
+          try {
+            await addActivity(parsed.data);
+            added++;
+          } catch (err) {
+            skipped++;
+          }
+        }
+        if (added) {
+          toast(
+            `Added ${added} activit${added === 1 ? "y" : "ies"}.${skipped ? ` ${skipped} row${skipped === 1 ? "" : "s"} skipped (duplicate or invalid).` : ""}`,
+            skipped ? "info" : "success"
+          );
+          closeModal();
+        } else {
+          toast(`Nothing added — ${skipped} row${skipped === 1 ? "" : "s"} skipped (duplicate or invalid).`, "error");
+        }
+      });
+      overlay.querySelector(".modal__body").appendChild(form);
+    },
+  });
+}
+
+/** Build a template CSV and download it. */
+function downloadActivityTemplate() {
+  const rows = [
+    "name,type,days,time,venue,capacity,description,category,gender",
+    'Basketball,CCA,"Mon,Wed",3:00 PM – 4:30 PM,Main Gym,20,Shoot hoops and build teamwork,,',
+    'Track & Field,ECA,"Tue,Thu",3:00 PM – 4:30 PM,Stadium,30,Run fast — all levels welcome,Athletics,',
+    'Chess Club,ECA,Tue,3:00 PM – 4:00 PM,Library,20,From pawn to grandmaster,Non-Athletics,',
+  ];
+  const blob = new Blob(["\ufeff" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "clubboard_activities_template.csv";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  toast("Template downloaded — fill it in and upload it back.");
+}
+
+/** Parse CSV text into rows of fields (handles quoted fields). */
+function parseCsv(text) {
+  const rows = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map(parseCsvLine);
+  // Drop a header row if the first cell looks like the template header.
+  if (rows.length && (rows[0][0] || "").toLowerCase() === "name") rows.shift();
+  return rows;
+}
+
+function parseCsvLine(line) {
+  const out = [];
+  let cur = "";
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQ) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQ = false;
+        }
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"') {
+      inQ = true;
+    } else if (ch === ",") {
+      out.push(cur.trim());
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+/** Turn one CSV row into an activity payload, or { error } explaining why not. */
+function parseActivityRow(row) {
+  const [name, type, days, time, venue, capacity, description, category, gender] = row;
+  const fail = (msg) => ({ error: msg });
+  if (!name) return fail("row with no name");
+  const t = (type || "CCA").trim().toUpperCase();
+  if (t !== "CCA" && t !== "ECA") return fail(`"${name}": type must be CCA or ECA`);
+  const dayList = (days || "").split(",").map((d) => d.trim()).filter(Boolean);
+  if (!dayList.length) return fail(`"${name}": missing days`);
+  if (dayList.some((d) => !DAYS.includes(d))) return fail(`"${name}": unknown day`);
+  const cap = capacity === undefined || capacity === "" ? 0 : Number(capacity);
+  if (Number.isNaN(cap) || cap < 0) return fail(`"${name}": invalid capacity`);
+  const cat = (category || "").trim().toLowerCase();
+  const g = (gender || "").trim().toUpperCase();
+  return {
+    data: {
+      name: name.trim(),
+      type: t,
+      days: dayList,
+      time: (time || "").trim(),
+      venue: (venue || "").trim(),
+      capacity: cap,
+      description: (description || "").trim(),
+      category: t === "ECA" ? (cat === "athletics" ? "Athletics" : "Non-Athletics") : null,
+      genderRestriction: g === "F" || g === "M" ? g : null,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -521,8 +722,9 @@ function bindStudentRowActions(container) {
 
 /**
  * Modal for admins to set a student's CCA/ECA choices directly. Mirrors the
- * student's own picker: 1–2 of each type, full clubs are disabled, and the
- * save keeps seat counters / quotas in sync (see setStudentChoices).
+ * student's own picker: at least 2 activities in any mix, up to 2 ECAs (one
+ * must be Athletics when 2 are picked), full clubs are disabled, and the save
+ * keeps seat counters / quotas in sync (see setStudentChoices).
  */
 function openEditChoicesModal(email) {
   const s = getStudents().find((x) => x.email === email);
@@ -541,10 +743,10 @@ function openEditChoicesModal(email) {
         const taken = seats.get(a.id) || 0;
         const isSelected = set.has(a.id);
         const full = a.capacity > 0 && taken >= a.capacity && !isSelected;
-        const capped = set.size >= 2 && !isSelected;
+        const capped = type === "eca" && set.size >= 2 && !isSelected;
         return `
           <button type="button" class="admin-pick admin-pick--${type} ${isSelected ? "is-on" : ""} ${full ? "is-full" : ""} ${capped ? "is-capped" : ""}" data-id="${esc(a.id)}" data-type="${type}" ${full ? "disabled" : ""}>
-            <span class="admin-pick__name">${esc(a.name)}</span>
+            <span class="admin-pick__name">${esc(a.name)}${a.category === "Athletics" ? ' <span class="cat-pill cat-pill--athletics">Athletics</span>' : ""}</span>
             <span class="admin-pick__days">${a.days.map((d) => `<span>${d}</span>`).join("")}</span>
           </button>`;
       })
@@ -563,12 +765,27 @@ function openEditChoicesModal(email) {
       : "";
   };
 
+  const ecaNote = () => {
+    const ecaActs = [...selectedEca].map((id) => activities.find((a) => a.id === id)).filter(Boolean);
+    if (selectedEca.size === 2 && !ecaActs.some((a) => (a.category || "").toLowerCase() === "athletics")) {
+      return `<div class="alert alert--warn">⚠ Two ECAs picked but neither is <b>Athletics</b> — at least one must be Athletics for the student to save this.</div>`;
+    }
+    return "";
+  };
+
+  const totalNote = () => {
+    if (selectedCca.size + selectedEca.size < 2) {
+      return `<div class="alert alert--warn">⚠ Pick at least 2 activities in total — any mix of CCAs and ECAs (e.g. 2 ECAs, or 2 CCAs, or 1 of each).</div>`;
+    }
+    return "";
+  };
+
   const bodyHtml = `
     <p class="modal__message">
-      <strong>${esc(s.email)}</strong>${s.className ? ` · Class ${esc(s.className)}` : ""} — set the clubs this student should have (up to 2 of each; leave a section empty to clear it).
+      <strong>${esc(s.email)}</strong>${s.className ? ` · Class ${esc(s.className)}` : ""} — set the clubs this student should have (at least 2 activities in any mix; up to 2 ECAs, one of them Athletics if 2; use Reset to clear all choices).
     </p>
     <div class="modal__section">
-      <h4>CCA <span class="muted" id="edit-cca-count">${selectedCca.size} of 2</span></h4>
+      <h4>CCA <span class="muted" id="edit-cca-count">${selectedCca.size} chosen</span></h4>
       <div class="admin-pick-grid" id="edit-cca-grid"></div>
     </div>
     <div class="modal__section">
@@ -576,6 +793,8 @@ function openEditChoicesModal(email) {
       <div class="admin-pick-grid" id="edit-eca-grid"></div>
     </div>
     <div id="edit-clash-note"></div>
+    <div id="edit-eca-note"></div>
+    <div id="edit-total-note"></div>
   `;
 
   openModal({
@@ -593,10 +812,14 @@ function openEditChoicesModal(email) {
         if (ecaGrid) ecaGrid.innerHTML = renderPicks(ecaList, selectedEca, "eca");
         const ccaCount = overlay.querySelector("#edit-cca-count");
         const ecaCount = overlay.querySelector("#edit-eca-count");
-        if (ccaCount) ccaCount.textContent = `${selectedCca.size} of 2`;
+        if (ccaCount) ccaCount.textContent = `${selectedCca.size} chosen`;
         if (ecaCount) ecaCount.textContent = `${selectedEca.size} of 2`;
         const note = overlay.querySelector("#edit-clash-note");
         if (note) note.innerHTML = clashNote();
+        const ecaNoteEl = overlay.querySelector("#edit-eca-note");
+        if (ecaNoteEl) ecaNoteEl.innerHTML = ecaNote();
+        const totalNoteEl = overlay.querySelector("#edit-total-note");
+        if (totalNoteEl) totalNoteEl.innerHTML = totalNote();
       };
 
       overlay.addEventListener("click", (e) => {
@@ -605,8 +828,8 @@ function openEditChoicesModal(email) {
         const set = btn.dataset.type === "cca" ? selectedCca : selectedEca;
         const id = btn.dataset.id;
         if (set.has(id)) set.delete(id);
-        else if (set.size >= 2) {
-          toast(`At most 2 ${btn.dataset.type === "cca" ? "CCAs" : "ECAs"} per student.`, "error");
+        else if (btn.dataset.type === "eca" && set.size >= 2) {
+          toast("At most 2 ECAs per student.", "error");
           return;
         } else set.add(id);
         render();
@@ -616,6 +839,15 @@ function openEditChoicesModal(email) {
       form.id = "edit-choices-form";
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
+        if (selectedCca.size + selectedEca.size < 2) {
+          toast("Pick at least 2 activities in total (any mix of CCAs and ECAs).", "error");
+          return;
+        }
+        const ecaActs = [...selectedEca].map((id) => activities.find((a) => a.id === id)).filter(Boolean);
+        if (selectedEca.size === 2 && !ecaActs.some((a) => (a.category || "").toLowerCase() === "athletics")) {
+          toast("One of the 2 ECAs must be an Athletics activity.", "error");
+          return;
+        }
         try {
           await setStudentChoices(email, [...selectedCca], [...selectedEca]);
           toast("Choices updated.");
@@ -757,8 +989,9 @@ function renderReports(activities, students) {
       <h2>Per Class Reports</h2>
       ${classReport()}
     </div>
-    <div class="panel__toolbar" style="margin-top:1rem;">
+    <div class="panel__toolbar" style="margin-top:1rem; gap:0.5rem;">
       <button class="btn btn--primary" id="btn-export-csv">Export All to CSV</button>
+      <button class="btn btn--secondary" id="btn-export-xls">Export All to XLS</button>
     </div>
   `;
 }
@@ -766,8 +999,11 @@ function renderReports(activities, students) {
 function bindReportActions(container) {
   container.addEventListener("click", async (e) => {
     const exportBtn = e.target.closest("#btn-export-csv");
+    const exportXlsBtn = e.target.closest("#btn-export-xls");
     if (exportBtn) {
       await exportAllReportsToCSV();
+    } else if (exportXlsBtn) {
+      await exportAllReportsToXLS();
     }
   });
 }
@@ -824,6 +1060,108 @@ async function exportAllReportsToCSV() {
   link.click();
   document.body.removeChild(link);
   toast("Report exported to CSV.");
+}
+
+async function exportAllReportsToXLS() {
+  const activities = getActivities();
+  const students = getStudents();
+  
+  // Build HTML table content that Excel can interpret as XLS
+  let xlsContent = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" 
+          xmlns:x="urn:schemas-microsoft-com:office:excel" 
+          xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="UTF-8">
+      <!--[if gte mso 9]>
+      <xml>
+        <x:ExcelWorkbook>
+          <x:ExcelWorksheets>
+            <x:ExcelWorksheet>
+              <x:Name>ClubBoard Report</x:Name>
+              <x:WorksheetOptions>
+                <x:DisplayGridlines/>
+              </x:WorksheetOptions>
+            </x:ExcelWorksheet>
+          </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+      </xml>
+      <![endif]-->
+      <style>
+        table { border-collapse: collapse; }
+        th, td { border: 1px solid #000; padding: 6px 10px; text-align: left; }
+        th { background-color: #f0f0f0; font-weight: bold; }
+        h2 { font-size: 16pt; margin-top: 20px; }
+        h3 { font-size: 12pt; margin-top: 15px; }
+        .section-break { height: 20px; }
+      </style>
+    </head>
+    <body>
+  `;
+  
+  // Per-activity reports
+  xlsContent += `<h2>PER ACTIVITY REPORTS</h2>`;
+  
+  for (const act of activities) {
+    const type = act.type;
+    const enrolled = students.filter((s) => (type === "CCA" ? s.cca : s.eca).includes(act.id));
+    
+    xlsContent += `<h3>${act.name} (${type})</h3>`;
+    xlsContent += `<p><strong>Days:</strong> ${act.days.join(", ")} | <strong>Time:</strong> ${act.time || "N/A"} | <strong>Venue:</strong> ${act.venue || "N/A"}${act.genderRestriction ? ` | <strong>Gender:</strong> ${act.genderRestriction === "F" ? "Girls only" : "Boys only"}` : ""}</p>`;
+    xlsContent += `<p><strong>Enrolled:</strong> ${enrolled.length} / ${act.capacity || "Unlimited"}</p>`;
+    
+    if (enrolled.length > 0) {
+      xlsContent += `<table><thead><tr><th>Nickname</th><th>Full Name</th><th>Class</th></tr></thead><tbody>`;
+      for (const s of enrolled) {
+        xlsContent += `<tr><td>${s.nickname || ""}</td><td>${s.name || ""}</td><td>${s.className || ""}</td></tr>`;
+      }
+      xlsContent += `</tbody></table>`;
+    } else {
+      xlsContent += `<p><em>No students enrolled yet.</em></p>`;
+    }
+    
+    xlsContent += `<div class="section-break"></div>`;
+  }
+  
+  // Per-class reports
+  xlsContent += `<h2>PER CLASS REPORTS</h2>`;
+  const classes = [...new Set(students.map((s) => s.className).filter(Boolean))].sort();
+  
+  for (const cls of classes) {
+    const classStudents = students.filter((s) => s.className === cls);
+    
+    xlsContent += `<h3>Class ${cls}</h3>`;
+    xlsContent += `<table><thead><tr><th>Nickname</th><th>Full Name</th><th>CCA with Location</th><th>ECA with Location</th></tr></thead><tbody>`;
+    
+    for (const s of classStudents) {
+      const ccaLocs = (s.cca || []).map((id) => {
+        const a = activities.find((x) => x.id === id);
+        return a ? `${a.name} (${a.venue || "N/A"})` : "?";
+      }).join(", ") || "None";
+      const ecaLocs = (s.eca || []).map((id) => {
+        const a = activities.find((x) => x.id === id);
+        return a ? `${a.name} (${a.venue || "N/A"})` : "?";
+      }).join(", ") || "None";
+      
+      xlsContent += `<tr><td>${s.nickname || ""}</td><td>${s.name || ""}</td><td>${ccaLocs}</td><td>${ecaLocs}</td></tr>`;
+    }
+    
+    xlsContent += `</tbody></table>`;
+    xlsContent += `<div class="section-break"></div>`;
+  }
+  
+  xlsContent += `</body></html>`;
+  
+  const blob = new Blob([xlsContent], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `clubboard_report_${new Date().toISOString().slice(0, 10)}.xls`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  toast("Report exported to XLS.");
 }
 
 // The activity grid buttons are bound by event delegation too.

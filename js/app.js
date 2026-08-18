@@ -62,11 +62,11 @@ function renderLogin() {
         </div>
         <h1>Pick your club.<br />Own your week.</h1>
         <p class="login__lede">
-          Choose at least one <b>CCA</b> and one <b>ECA</b> for the new term —
-          no two clubs on the same day, guaranteed.
+          Choose at least two clubs for the new term — any mix of CCAs and
+          ECAs, no two clubs on the same day, guaranteed.
         </p>
         <ul class="login__points">
-          <li><span class="tick"></span>One CCA and one ECA, minimum</li>
+          <li><span class="tick"></span>At least two activities, any mix</li>
           <li><span class="tick"></span>Automatic day-clash protection</li>
           <li><span class="tick"></span>Managed by your school admin</li>
         </ul>
