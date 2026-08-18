@@ -265,17 +265,28 @@ export async function configureAccess(role, email) {
   // listeners here (after auth) instead of in initFirebase() to avoid
   // "missing permissions" errors when the user isn't signed in yet.
   const setupListener = (colName, callback) => {
-    return onSnapshot(
-      collection(db, colName),
-      callback,
-      (err) => {
-        // Only log if it's not a permission error during initial auth propagation
-        // On first login, there's a brief window where auth hasn't fully propagated
-        if (err.code !== "permission-denied") {
-          console.error(`${colName} listener failed:`, err);
+    let retryTimeout = null;
+    const listen = () => {
+      return onSnapshot(
+        collection(db, colName),
+        callback,
+        (err) => {
+          // On first login, there's a brief window where auth hasn't fully propagated
+          // Retry after a short delay if permission-denied
+          if (err.code === "permission-denied") {
+            if (!retryTimeout) {
+              retryTimeout = setTimeout(() => {
+                retryTimeout = null;
+                listen();
+              }, 500);
+            }
+          } else {
+            console.error(`${colName} listener failed:`, err);
+          }
         }
-      }
-    );
+      );
+    };
+    return listen();
   };
 
   unsubscribes.push(
