@@ -3,7 +3,7 @@
 // ============================================================================
 // A student picks at least two activities (any mix of CCAs and ECAs). The app
 // blocks any selection where a chosen CCA and a chosen ECA run on the same
-// day of the week, and live-validates capacity before saving. ECAs are
+// day of the week, and validates capacity atomically when saving. ECAs are
 // categorised as Athletics / Non-Athletics, and picking 2 ECAs requires at
 // least one to be Athletics. The pick lists are grouped by day of week.
 // ============================================================================
@@ -34,8 +34,8 @@ export function mountStudentView() {
   const ccaList = activities.filter((a) => a.type === "CCA");
   const ecaList = activities.filter((a) => a.type === "ECA");
 
-  // capacity: live seat counts per activity (from the `seats` collection in
-  // firebase mode — reading the whole roster is admin-only for privacy)
+  // Capacity is loaded once from `seats`; the save transaction performs the
+  // authoritative quota check so stale display data cannot overbook a club.
   const takeCount = getSeats();
 
   app.innerHTML = `

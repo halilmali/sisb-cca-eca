@@ -26,7 +26,7 @@ export const MODE = isConfigured ? "firebase" : "demo";
 // ---------------------------------------------------------------------------
 let activities = [];
 let students = []; // firebase mode: full roster — only populated for admins
-let seats = new Map(); // firebase mode: activityId -> live seat count
+let seats = new Map(); // firebase mode: activityId -> latest loaded seat count
 let myStudent = null; // firebase mode: the signed-in user's own doc
 const listeners = new Set();
 
@@ -240,6 +240,7 @@ function saveDemo() {
 let db = null;
 let unsubscribes = [];
 let roleUnsubscribes = [];
+let accessVersion = 0;
 
 async function initFirebase() {
   const { getDb } = await import("./firebase-init.js");
@@ -253,21 +254,22 @@ async function initFirebase() {
  */
 export async function configureAccess(role, email) {
   if (MODE !== "firebase") return;
+  const version = ++accessVersion;
   // Drop role-scoped state from any previous session before re-subscribing,
   // so a later user never sees (or reads via the console) stale roster data.
   students = [];
   myStudent = null;
+  seats = new Map();
   for (const unsub of unsubscribes) unsub();
   unsubscribes = [];
   for (const unsub of roleUnsubscribes) unsub();
   roleUnsubscribes = [];
   if (!db) return;
 
-  const { collection, doc, onSnapshot } = await import("firebase/firestore");
+  const { collection, doc, getDocs, onSnapshot } = await import("firebase/firestore");
 
-  // activities + seats are readable by every signed-in user. Set up these
-  // listeners here (after auth) instead of in initFirebase() to avoid
-  // "missing permissions" errors when the user isn't signed in yet.
+  // Shared data is loaded after auth to avoid "missing permissions" errors
+  // when the user isn't signed in yet.
   const setupListener = (colName, callback) => {
     let retryTimeout = null;
     let hasReceivedData = false;
@@ -312,14 +314,17 @@ export async function configureAccess(role, email) {
     setupListener("activities", (snap) => {
       activities = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       emit();
-    }),
-    setupListener("seats", (snap) => {
-      seats = new Map(snap.docs.map((d) => [d.id, d.data().count || 0]));
-      emit();
     })
   );
 
   if (role === "admin") {
+    // Admins need live counters while managing assignments and quotas.
+    unsubscribes.push(
+      setupListener("seats", (snap) => {
+        seats = new Map(snap.docs.map((d) => [d.id, d.data().count || 0]));
+        emit();
+      })
+    );
     roleUnsubscribes.push(
       onSnapshot(
         collection(db, "students"),
@@ -335,6 +340,19 @@ export async function configureAccess(role, email) {
       )
     );
   } else if (role === "student") {
+    // Students only need an availability snapshot. Quotas are checked again
+    // atomically when they save, so a live collection listener only creates
+    // read fan-out without improving correctness.
+    try {
+      const snap = await getDocs(collection(db, "seats"));
+      if (version !== accessVersion) return;
+      seats = new Map(snap.docs.map((d) => [d.id, d.data().count || 0]));
+      emit();
+    } catch (err) {
+      console.error("seats load failed:", err);
+    }
+    if (version !== accessVersion) return;
+
     const key = String(email).toLowerCase();
     roleUnsubscribes.push(
       onSnapshot(
@@ -522,7 +540,7 @@ export async function saveChoices(email, ccaIds, ecaIds) {
   const { doc, runTransaction } = await import("firebase/firestore");
   const studentRef = doc(db, "students", key);
 
-  await runTransaction(db, async (tx) => {
+  const changes = await runTransaction(db, async (tx) => {
     // Phase 1 — ALL reads (Firestore forbids reads after the first write).
     const studentSnap = await tx.get(studentRef);
     if (!studentSnap.exists()) throw new Error("You're not on the club list yet.");
@@ -574,7 +592,19 @@ export async function saveChoices(email, ccaIds, ecaIds) {
       eca: ecaIds,
       submittedAt: Date.now(),
     });
+    return { added, removed };
   });
+
+  // Student clients use a one-time seat snapshot. Keep this client's display
+  // current after its own successful transaction without restoring a live
+  // listener that broadcasts every student's changes to every other student.
+  for (const actId of changes.added) {
+    seats.set(actId, (seats.get(actId) || 0) + 1);
+  }
+  for (const actId of changes.removed) {
+    seats.set(actId, Math.max(0, (seats.get(actId) || 0) - 1));
+  }
+  emit();
 }
 
 /**
