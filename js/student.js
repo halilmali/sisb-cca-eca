@@ -14,7 +14,7 @@ import {
   saveChoices,
 } from "./store.js";
 import * as auth from "./auth.js";
-import { $, $$, esc, toast, dayChips, weekStrip, fmtDateTime, DAYS } from "./ui.js";
+import { $, $$, esc, toast, weekStrip, fmtDateTime, DAYS } from "./ui.js";
 
 export function mountStudentView() {
   const app = $("#app");
@@ -322,7 +322,6 @@ function renderPickCard(a, set, takeCount, type, studentGender) {
         ${a.genderRestriction ? `<span class="type-badge type-badge--${a.genderRestriction === "F" ? "cca" : "eca"}" style="margin-left:6px;">${a.genderRestriction === "F" ? "Girls" : "Boys"}</span>` : ""}
       </div>
       ${a.description ? `<p class="pick-card__desc">${esc(a.description)}</p>` : ""}
-      <div class="day-chips">${dayChips(a.days)}</div>
       <div class="pick-card__meta">
         <span>🕒 ${esc(a.time || "—")}</span>
         <span>📍 ${esc(a.venue || "—")}</span>
