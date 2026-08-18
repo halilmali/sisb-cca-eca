@@ -22,6 +22,8 @@ import { $, $$, esc, toast, openModal, closeModal, confirmDialog, dayChips, DAYS
 
 let activeTab = "activities";
 let searchQuery = "";
+let sortKey = ""; // "" | "class" | "cca" | "eca" | "submitted"
+let sortDir = 1; // 1 = ascending, -1 = descending
 
 export function mountAdminView() {
   const app = $("#app");
@@ -108,6 +110,27 @@ export function mountAdminView() {
     })
   );
 
+  // Sortable Students-table column headers (Class / CCA / ECA / Submitted).
+  // Click cycles ascending → descending; re-render keeps search + active tab.
+  $$(".th-sort", app).forEach((th) => {
+    const cycleSort = () => {
+      const key = th.dataset.sort;
+      if (sortKey === key) sortDir *= -1;
+      else {
+        sortKey = key;
+        sortDir = 1;
+      }
+      mountAdminView();
+    };
+    th.addEventListener("click", cycleSort);
+    th.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        cycleSort();
+      }
+    });
+  });
+
   // Delegated handlers are bound to the freshly rendered shell element so
   // they die with it on re-render (no listener accumulation on #app).
   const shell = $(".shell", app);
@@ -128,7 +151,7 @@ export function mountAdminView() {
     search.addEventListener("input", () => {
       searchQuery = search.value.trim().toLowerCase();
       const tbody = $("#stu-tbody");
-      if (tbody) tbody.innerHTML = renderStudentRows(filterStudents(students), activities);
+      if (tbody) tbody.innerHTML = renderStudentRows(getSortedStudents(filterStudents(students)), activities);
     });
   }
 
@@ -511,18 +534,56 @@ function filterStudents(students) {
   );
 }
 
+/**
+ * Apply the active column sort (set by clicking a table header). Without a
+ * sort key the natural roster order is kept. Missing values (no class, no
+ * submission date) always sort last, regardless of direction.
+ */
+function getSortedStudents(students) {
+  if (!sortKey) return students;
+  return [...students].sort((a, b) => {
+    if (sortKey === "cca" || sortKey === "eca") {
+      // Sort by how many of that type the student has chosen.
+      return ((a[sortKey] || []).length - (b[sortKey] || []).length) * sortDir;
+    }
+    if (sortKey === "submitted") {
+      const aNone = !a.submittedAt;
+      const bNone = !b.submittedAt;
+      if (aNone && bNone) return 0;
+      if (aNone) return 1;
+      if (bNone) return -1;
+      return (a.submittedAt - b.submittedAt) * sortDir;
+    }
+    // class
+    const av = (a.className || "").trim().toLowerCase();
+    const bv = (b.className || "").trim().toLowerCase();
+    if (!av && !bv) return 0;
+    if (!av) return 1;
+    if (!bv) return -1;
+    return av.localeCompare(bv) * sortDir;
+  });
+}
+
 function renderStudents(students, activities) {
-  const rows = renderStudentRows(filterStudents(students), activities);
+  const rows = renderStudentRows(getSortedStudents(filterStudents(students)), activities);
+  const sortTh = (key, label) => {
+    const active = sortKey === key;
+    const arrow = active ? (sortDir === 1 ? "▲" : "▼") : "";
+    return `
+      <th class="th-sort ${active ? "is-sorted" : ""}" data-sort="${key}" role="button" tabindex="0" aria-sort="${active ? (sortDir === 1 ? "ascending" : "descending") : "none"}">
+        ${label}${arrow ? `<span class="sort-arrow" aria-hidden="true"> ${arrow}</span>` : ""}
+      </th>`;
+  };
   return `
     <div class="table-wrap">
       <table class="table">
         <thead>
           <tr>
             <th>Student</th>
-            <th>Class</th>
-            <th>CCA</th>
-            <th>ECA</th>
-            <th>Submitted</th>
+            ${sortTh("class", "Class")}
+            ${sortTh("cca", "CCA")}
+            ${sortTh("eca", "ECA")}
+            ${sortTh("submitted", "Submitted")}
             <th class="ta-right">Actions</th>
           </tr>
         </thead>

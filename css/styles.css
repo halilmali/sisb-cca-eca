@@ -686,6 +686,25 @@ button {
   white-space: nowrap;
 }
 
+.th-sort {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.th-sort:hover {
+  color: var(--ink);
+}
+
+.th-sort.is-sorted {
+  color: var(--cca);
+}
+
+.sort-arrow {
+  font-size: 0.66rem;
+  color: inherit;
+}
+
 /* ---------------------------------------------------------------------------
    Empty states
    --------------------------------------------------------------------------- */
