@@ -267,8 +267,11 @@ export async function configureAccess(role, email) {
   const setupListener = (colName, callback) => {
     let retryTimeout = null;
     let hasReceivedData = false;
+    let activeUnsubscribe = null;
+    let cancelled = false;
     const listen = () => {
-      return onSnapshot(
+      if (cancelled) return;
+      activeUnsubscribe = onSnapshot(
         collection(db, colName),
         (snap) => {
           hasReceivedData = true;
@@ -290,7 +293,15 @@ export async function configureAccess(role, email) {
         }
       );
     };
-    return listen();
+    listen();
+    // Always cancel the currently active retry/listener. The previous code
+    // returned only the first unsubscribe function, so a retried listener
+    // survived sign-out and could be removed by a later login race.
+    return () => {
+      cancelled = true;
+      if (retryTimeout) clearTimeout(retryTimeout);
+      if (activeUnsubscribe) activeUnsubscribe();
+    };
   };
 
   unsubscribes.push(

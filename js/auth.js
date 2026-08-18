@@ -50,13 +50,10 @@ export async function loginWithGoogle() {
   const { getApp } = await import("./firebase-init.js");
   const auth = getAuth(await getApp());
   const provider = new GoogleAuthProvider();
-  const result = await signInWithPopup(auth, provider);
-  const u = result.user;
-  setUser({
-    email: (u.email || "").toLowerCase(),
-    name: u.displayName || "",
-    photoURL: u.photoURL || "",
-  });
+  // onAuthStateChanged below is the single source of truth.  Emitting here as
+  // well used to start two overlapping store initialisations, one of which
+  // could tear down the other's Firestore listeners during student login.
+  await signInWithPopup(auth, provider);
 }
 
 export async function logout() {
@@ -85,8 +82,12 @@ export async function initAuth() {
   const { getAuth, onAuthStateChanged } = await import("firebase/auth");
   const { getApp } = await import("./firebase-init.js");
   const auth = getAuth(await getApp());
-  onAuthStateChanged(auth, (u) => {
+  onAuthStateChanged(auth, async (u) => {
     if (u) {
+      // Make sure the ID token is available before role checks and Firestore
+      // listeners begin. This is especially important immediately after the
+      // Google popup completes.
+      await u.getIdToken();
       setUser({
         email: (u.email || "").toLowerCase(),
         name: u.displayName || "",
