@@ -266,15 +266,19 @@ export async function configureAccess(role, email) {
   // "missing permissions" errors when the user isn't signed in yet.
   const setupListener = (colName, callback) => {
     let retryTimeout = null;
+    let hasReceivedData = false;
     const listen = () => {
       return onSnapshot(
         collection(db, colName),
-        callback,
+        (snap) => {
+          hasReceivedData = true;
+          callback(snap);
+        },
         (err) => {
           // On first login, there's a brief window where auth hasn't fully propagated
-          // Retry after a short delay if permission-denied
+          // Retry after a short delay if permission-denied, but don't log the error
           if (err.code === "permission-denied") {
-            if (!retryTimeout) {
+            if (!retryTimeout && !hasReceivedData) {
               retryTimeout = setTimeout(() => {
                 retryTimeout = null;
                 listen();
@@ -308,7 +312,11 @@ export async function configureAccess(role, email) {
           students = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           emit();
         },
-        (err) => console.error("students listener failed:", err)
+        (err) => {
+          // Suppress permission-denied errors on first login for students
+          if (err.code === "permission-denied") return;
+          console.error("students listener failed:", err);
+        }
       )
     );
   } else if (role === "student") {
@@ -320,7 +328,11 @@ export async function configureAccess(role, email) {
           myStudent = snap.exists() ? { id: snap.id, ...snap.data() } : null;
           emit();
         },
-        (err) => console.error("own-student listener failed:", err)
+        (err) => {
+          // Suppress permission-denied errors on first login for students
+          if (err.code === "permission-denied") return;
+          console.error("own-student listener failed:", err);
+        }
       )
     );
   }

@@ -53,6 +53,7 @@ function render() {
 // ---------------------------------------------------------------------------
 function renderLogin() {
   const app = $("#app");
+  const hasPersistedUser = MODE === "demo" && localStorage.getItem("clubboard_demo_user");
   app.innerHTML = `
     <div class="login">
       <section class="login__hero">
@@ -106,6 +107,7 @@ function renderLogin() {
                    <button class="btn btn--primary" id="btn-demo-admin">Preview as Admin</button>
                    <button class="btn btn--outline" id="btn-demo-student">Preview as Student</button>
                  </div>
+                 ${hasPersistedUser ? `<p class="demo-note">Already signed in? <a href="#" id="btn-clear-session">Clear saved session</a></p>` : ""}
                  <p class="demo-note">
                    Demo data lives in this browser. To go live, add your
                    Firebase config in <code>js/config.js</code>.
@@ -131,6 +133,13 @@ function renderLogin() {
     $("#btn-demo-student").addEventListener("click", () =>
       auth.demoLogin("alex@demo.school", "Alex Chen")
     );
+    if (hasPersistedUser) {
+      $("#btn-clear-session").addEventListener("click", (e) => {
+        e.preventDefault();
+        localStorage.removeItem("clubboard_demo_user");
+        location.reload();
+      });
+    }
   }
 }
 
