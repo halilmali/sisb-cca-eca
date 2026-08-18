@@ -973,12 +973,6 @@ button {
   white-space: nowrap;
 }
 
-.pick-card__desc {
-  color: var(--ink-2);
-  font-size: 0.82rem;
-  margin-top: 4px;
-}
-
 .pick-card__meta {
   display: flex;
   gap: 10px;

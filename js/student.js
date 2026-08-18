@@ -321,7 +321,6 @@ function renderPickCard(a, set, takeCount, type, studentGender) {
         ${full ? '<span class="full-pill">Full</span>' : ""}
         ${a.genderRestriction ? `<span class="type-badge type-badge--${a.genderRestriction === "F" ? "cca" : "eca"}" style="margin-left:6px;">${a.genderRestriction === "F" ? "Girls" : "Boys"}</span>` : ""}
       </div>
-      ${a.description ? `<p class="pick-card__desc">${esc(a.description)}</p>` : ""}
       <div class="pick-card__meta">
         <span>🕒 ${esc(a.time || "—")}</span>
         <span>📍 ${esc(a.venue || "—")}</span>

@@ -242,7 +242,7 @@ function openActivityModal(activity = null) {
         </div>
       </label>
       <label class="field">
-        <span>Description</span>
+        <span>Description <em class="muted">(optional)</em></span>
         <textarea name="description" rows="2" maxlength="200" placeholder="Short blurb for students">${esc(a.description || "")}</textarea>
       </label>
     </form>
@@ -332,7 +332,7 @@ function openBulkActivitiesModal() {
       <label class="btn btn--ghost btn--sm" style="cursor:pointer;">📄 Load from file<input type="file" id="bulk-file" accept=".csv,.txt,text/csv" hidden></label>
     </div>
     <div class="field">
-      <span>Spreadsheet paste — columns: name, type (CCA/ECA), days ("Mon,Wed"), time, venue, capacity (0 = unlimited), description, category (Athletics/Non-Athletics — ECAs only), gender (blank/F/M)</span>
+      <span>Spreadsheet paste — columns: name, type (CCA/ECA), days ("Mon,Wed"), time, venue, capacity (0 = unlimited), description (optional), category (Athletics/Non-Athletics — ECAs only), gender (blank/F/M)</span>
       <textarea name="bulk" id="bulk-activities" rows="10" placeholder="Basketball,CCA,&quot;Mon,Wed&quot;,3:00 PM – 4:30 PM,Main Gym,20,Shoot hoops and build teamwork,,&#10;Track &amp; Field,ECA,&quot;Tue,Thu&quot;,3:00 PM – 4:30 PM,Stadium,30,Run fast — all levels welcome,Athletics,"></textarea>
     </div>
     <p class="field__note">Every row adds a new activity. Rows with a name that already exists, or a missing/invalid required field, are skipped and reported.</p>
