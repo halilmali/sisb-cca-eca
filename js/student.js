@@ -11,6 +11,7 @@ import {
   getActivities,
   getSeats,
   getStudent,
+  areSeatCountsReady,
   saveChoices,
 } from "./store.js";
 import * as auth from "./auth.js";
@@ -21,6 +22,7 @@ export function mountStudentView() {
   const user = auth.getUser();
   const activities = getActivities();
   const me = getStudent(user.email);
+  const seatCountsReady = areSeatCountsReady();
   const savedCca = me?.cca || [];
   const savedEca = me?.eca || [];
 
@@ -34,7 +36,7 @@ export function mountStudentView() {
   const ccaList = activities.filter((a) => a.type === "CCA");
   const ecaList = activities.filter((a) => a.type === "ECA");
 
-  // Capacity is loaded once from `seats`; the save transaction performs the
+  // Capacity is loaded with each activity; the save transaction performs the
   // authoritative quota check so stale display data cannot overbook a club.
   const takeCount = getSeats();
 
@@ -154,7 +156,14 @@ export function mountStudentView() {
     // validation banner
     const banner = $("#validation-banner");
     if (banner) {
-      if (genderViolations.length) {
+      if (!seatCountsReady) {
+        banner.innerHTML = `
+          <div class="alert alert--warn" role="alert">
+            <strong>Registration is temporarily unavailable.</strong>
+            An administrator needs to migrate the activity seat counts.
+            <button class="btn btn--sm btn--secondary" id="btn-refresh-seat-counts" type="button">Check again</button>
+          </div>`;
+      } else if (genderViolations.length) {
         banner.innerHTML = `
           <div class="alert alert--danger" role="alert">
             <strong>Gender restriction!</strong>
@@ -196,7 +205,10 @@ export function mountStudentView() {
     // savebar
     const status = $("#save-status");
     const saveBtn = $("#btn-save");
-    if (ecaAthletics.length) {
+    if (!seatCountsReady) {
+      status.textContent = "Waiting for the administrator to migrate seat counts.";
+      saveBtn.disabled = true;
+    } else if (ecaAthletics.length) {
       status.textContent = "One of your 2 ECAs must be an Athletics activity.";
       saveBtn.disabled = true;
     } else if (genderViolations.length || ccaSameDayClash || ecaSameDayClash || clashDays.length) {
@@ -216,6 +228,10 @@ export function mountStudentView() {
 
   // Card click handlers are delegated to the fresh .pick-cols container so
   // they die with it on re-render (no listener accumulation on #app).
+  const shell = $(".student-shell", app);
+  shell.addEventListener("click", (event) => {
+    if (event.target.closest("#btn-refresh-seat-counts")) window.location.reload();
+  });
   const pickCols = $(".pick-cols", app);
   pickCols.addEventListener("click", (e) => {
     const card = e.target.closest(".pick-card");

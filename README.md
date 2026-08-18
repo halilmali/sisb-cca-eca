@@ -83,9 +83,8 @@ and pulls their display name from Google automatically.
 
 | Collection  | Document ID        | Shape                                                                    |
 | ----------- | ------------------ | ------------------------------------------------------------------------ |
-| `activities`| auto               | `{ name, type: "CCA"\|"ECA", days: ["Monday",...] (short names like "Mon" also accepted and normalized), time, venue, capacity (quota), description, category: "Athletics"\|"Non-Athletics"\|null (ECAs only) }` |
+| `activities`| auto               | `{ name, type: "CCA"\|"ECA", days: ["Monday",...] (short names like "Mon" also accepted and normalized), time, venue, capacity (quota), seatCount, description, category: "Athletics"\|"Non-Athletics"\|null (ECAs only) }` |
 | `students`  | student email      | `{ email, name, className, cca: [actId...], eca: [actId...], submittedAt }` |
-| `seats`     | activity id        | `{ count }` — live quota counter per activity (kept by the save transaction) |
 | `admins`    | admin email        | `{ addedAt }` — presence means admin                                     |
 
 ### Quota (capacity) rule
@@ -93,11 +92,15 @@ and pulls their display name from Google automatically.
 Every activity has a **quota** (`capacity` in the data; `0` = unlimited). The admin sets it when adding/editing an activity. When the number of students who picked a club reaches its quota:
 
 - the club's card is **disabled** for other students ("Quota full"), and
-- saving is **rejected** — in demo mode by checking the live roster, and in Firebase mode by a **Firestore transaction** that reads the `seats/{activityId}` counters and the activity quota, then updates the student doc and counters atomically. This makes the quota race-free: two students can't both grab the last spot at the same instant.
+- saving is **rejected** — in demo mode by checking the live roster, and in Firebase mode by a **Firestore transaction** that reads each affected activity's `seatCount` and quota, then updates the student and activity documents atomically. This makes the quota race-free: two students can't both grab the last spot at the same instant.
 
-The `seats` counters are adjusted automatically whenever a student saves/changes choices and whenever an admin resets or deletes a student (seats are released). Deleting an activity removes its counter.
+The embedded `seatCount` is adjusted automatically whenever a student saves/changes choices and whenever an admin resets or deletes a student. Students load activity details and availability once per connection; the transaction checks the latest count again when saving.
 
-> **Security note:** the quota is enforced by the app (client-side checks + a Firestore transaction), not by the security rules — the rules allow a signed-in user to move a seat counter by ±1 because the rule language can't verify the accompanying enrollment write. This is fine for students using the app normally; if you need hard enforcement against a hostile client, add a Cloud Function / Admin SDK endpoint for saving choices.
+> **Security note:** the quota is enforced by the app (client-side checks + a Firestore transaction). Rules require a student's own choices to add or remove the same activity whenever its `seatCount` moves by ±1. They still cannot prove that every arbitrary choice-list edit has a matching counter update. For complete enforcement against a hostile client, add a Cloud Function / Admin SDK endpoint for saving choices.
+
+### Migrating existing seat counters
+
+Deploy the application and `firestore.rules` together during a short maintenance window. Then sign in as an admin and click **Migrate seat counts** once. The migration uses an owned, renewable lease, derives every count from saved student choices, and writes it to the corresponding activity document. Student saving remains disabled until all activity documents have a valid `seatCount`; students already on the page can use **Check again** afterward. Legacy `seats` documents are retained as migration evidence. Before rolling back, rebuild those legacy counters from current student choices and restore the previous rules.
 
 ### The day-clash rule
 
@@ -166,14 +169,14 @@ What the shipped `firestore.rules` enforce:
 - **Admins only** can create/edit/delete activities, add/remove students, and
   reset choices. The `admins` collection is console-only (`allow write: false`).
 - **Roster privacy** — only admins can list the `students` collection; each
-  student can read **only their own document**. The student view shows "spots
-  left" from the `seats` collection, not from other students' docs.
+  student can read **only their own document**. Activity documents include
+  `seatCount`, so spots-left values do not require roster access.
 - **Choice limits** — a student's save is rejected server-side unless they keep
   **at least 2 activities in total** (any mix), at most 2 ECAs, and — when 2
   ECAs are picked — an **Athletics** activity.
-- **Quotas** — enforced atomically by the app's Firestore transaction
-  (reads `seats/{activityId}` counters against `capacity`), so two students
-  can't grab the last spot at once.
+- **Quotas** — enforced atomically by the app's Firestore transaction using
+  each activity's `seatCount` and `capacity`, so two students can't grab the
+  last spot at once.
 
 Known limitations (client-side app code, not rules):
 
@@ -182,7 +185,7 @@ Known limitations (client-side app code, not rules):
   reads per request, so the pairwise check can't be expressed there. Honest
   students are always blocked; a malicious one who edits the JS could save
   same-day clubs. Full server-side enforcement needs a Cloud Function.
-- **Seat counters** (`seats/{activityId}`) accept ±1 updates from any signed-in
-  user because rules can't verify the enrollment in the same transaction — a
-  hostile client could corrupt quota bookkeeping. The quota transaction still
-  prevents taking a seat when the counter reports full.
+- **Activity seat counts** can move only when the signed-in student's own
+  choices add or remove that activity. Rules still cannot iterate every list
+  change to prove all counters were updated, so a trusted backend is required
+  to close the remaining client-only limitation.

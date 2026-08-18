@@ -9,6 +9,7 @@ import {
   getActivities,
   getStudents,
   getSeats,
+  areSeatCountsReady,
   addActivity,
   updateActivity,
   deleteActivity,
@@ -16,6 +17,7 @@ import {
   deleteStudent,
   clearChoices,
   setStudentChoices,
+  migrateLegacySeatCounts,
 } from "./store.js";
 import * as auth from "./auth.js";
 import { $, $$, esc, toast, openModal, closeModal, confirmDialog, dayChips, DAYS, fmtDate, numOrZero, normDay } from "./ui.js";
@@ -34,6 +36,7 @@ export function mountAdminView() {
   const ccaCount = activities.filter((a) => a.type === "CCA").length;
   const ecaCount = activities.filter((a) => a.type === "ECA").length;
   const submitted = students.filter((s) => s.submittedAt).length;
+  const seatMigrationNeeded = !areSeatCountsReady();
 
   app.innerHTML = `
     <header class="topbar">
@@ -76,10 +79,11 @@ export function mountAdminView() {
       <section class="panel ${activeTab === "activities" ? "" : "is-hidden"}" data-panel="activities">
         <div class="panel__toolbar">
           <h2>Activities <span class="muted">(${ccaCount} CCA · ${ecaCount} ECA)</span></h2>
+          ${seatMigrationNeeded ? '<button class="btn btn--secondary" id="btn-migrate-seats">Migrate seat counts</button>' : ""}
           <button class="btn btn--secondary" id="btn-bulk-activities">⬆ Bulk upload</button>
           <button class="btn btn--primary" id="btn-add-activity">+ Add activity</button>
         </div>
-        ${renderActivityGrid(activities, students)}
+        ${renderActivityGrid(activities)}
       </section>
 
       <section class="panel ${activeTab === "students" ? "" : "is-hidden"}" data-panel="students">
@@ -140,6 +144,21 @@ export function mountAdminView() {
   $("#btn-signout").addEventListener("click", () => auth.logout());
   $("#btn-add-activity").addEventListener("click", () => openActivityModal());
   $("#btn-bulk-activities").addEventListener("click", () => openBulkActivitiesModal());
+  const migrateSeats = $("#btn-migrate-seats");
+  if (migrateSeats) {
+    migrateSeats.addEventListener("click", async () => {
+      migrateSeats.disabled = true;
+      migrateSeats.textContent = "Migrating…";
+      try {
+        const count = await migrateLegacySeatCounts();
+        toast(`${count} activit${count === 1 ? "y" : "ies"} reconciled.`);
+      } catch (err) {
+        migrateSeats.disabled = false;
+        migrateSeats.textContent = "Migrate seat counts";
+        toast(err.message || "Couldn't migrate seat counts.", "error");
+      }
+    });
+  }
   const emptyAddActivity = $("#empty-add-activity");
   if (emptyAddActivity) emptyAddActivity.addEventListener("click", () => openActivityModal());
   $("#btn-add-student").addEventListener("click", () => openStudentsModal());
@@ -162,7 +181,7 @@ export function mountAdminView() {
 // ---------------------------------------------------------------------------
 // Activities panel
 // ---------------------------------------------------------------------------
-function renderActivityGrid(activities, students) {
+function renderActivityGrid(activities) {
   if (!activities.length) {
     return `
       <div class="empty">
@@ -174,13 +193,8 @@ function renderActivityGrid(activities, students) {
     `;
   }
 
-  const counts = new Map(); // activityId -> students who chose it
-  students.forEach((s) => {
-    [...(s.cca || []), ...(s.eca || [])].forEach((id) => counts.set(id, (counts.get(id) || 0) + 1));
-  });
-
   const cards = activities.map((a) => {
-    const chosen = counts.get(a.id) || 0;
+    const chosen = Number.isInteger(a.seatCount) && a.seatCount >= 0 ? a.seatCount : 0;
     const quota = a.capacity > 0 ? a.capacity : null;
     const full = quota !== null && chosen >= quota;
     const status = quota === null
@@ -755,8 +769,12 @@ function bindStudentRowActions(container) {
       confirmText: "Reset choices",
     });
     if (ok) {
-      await clearChoices(email);
-      toast("Choices cleared.");
+      try {
+        await clearChoices(email);
+        toast("Choices cleared.");
+      } catch (err) {
+        toast(err.message || "Couldn't clear choices.", "error");
+      }
     }
   };
   const onDelete = async (email) => {
@@ -766,8 +784,12 @@ function bindStudentRowActions(container) {
       confirmText: "Remove",
     });
     if (ok) {
-      await deleteStudent(email);
-      toast("Student removed.");
+      try {
+        await deleteStudent(email);
+        toast("Student removed.");
+      } catch (err) {
+        toast(err.message || "Couldn't remove the student.", "error");
+      }
     }
   };
 

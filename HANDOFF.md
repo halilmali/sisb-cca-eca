@@ -25,9 +25,9 @@
   day-clash protection; **Athletics rule** (2 ECAs must include one Athletics
   ECA); quota "full" states; spots-left display; picker lists activities
   **by day**; save.
-- **Quotas**: `capacity` per activity (0 = unlimited). Enforced live in the UI
-  and **atomically** in a Firestore transaction via `seats/{activityId}`
-  counter docs. `setStudentChoices` (admin edit) keeps counters in sync and
+- **Quotas**: `capacity` and `seatCount` live on each activity (0 capacity =
+  unlimited). Enforced in the UI and **atomically** in a Firestore transaction.
+  `setStudentChoices` (admin edit) keeps counters in sync and
   rejects assigning to a full club.
 - **Choice limits**: at least 2 activities total in any mix; CCAs unlimited;
   ECAs capped at 2, and 2 ECAs must include an **Athletics** ECA (category
@@ -36,7 +36,11 @@
   enforces min 2 total / max 2 ECAs + the Athletics rule for student saves
   (with `is list` type guards).
 - **Roster privacy**: only admins can list `students`; a student reads only
-  their own doc. The student view gets "spots left" from the `seats` collection.
+  their own doc. Activity documents include the count needed for "spots left."
+- **Existing-data migration**: after deploying the matching app and rules in a
+  maintenance window, an admin must click **Migrate seat counts** once. It
+  recomputes activity counts from saved student choices; student saves remain
+  disabled until every activity has a valid nonnegative `seatCount`.
 - **Demo mode**: replace the `js/config.js` values with `YOUR_...` placeholders
   to preview with localStorage data (key `clubboard_demo_v1`). The user's real
   Firebase config is currently in place → the app runs in **Firebase mode**.
@@ -61,10 +65,10 @@ The user has a real Firebase project (`sisb-cca-eca`) and config is in
   so it can't be expressed in rules. Honest students are blocked; a malicious
   student editing JS (or calling `saveChoices` from the console) could save
   same-day clubs. **Full fix = Cloud Function** (declined by user for now).
-- **`seats` counters accept ±1 from any signed-in user** (rules can't verify
-  the accompanying enrollment write in the same transaction), so quota
-  bookkeeping can be gamed by a hostile client. The transaction still blocks
-  taking a seat when the counter reads full. Same Cloud Function fix.
+- **Activity `seatCount` ±1 updates must match an add/remove in the signed-in
+  student's own choices** via `getAfter()`. Rules still cannot prove every
+  arbitrary list change updated all corresponding counters, so complete
+  hostile-client protection still requires a trusted backend.
 - README's "🔒 Security note" section documents both of these.
 
 ## Verified in browser tests (playwright-cli)

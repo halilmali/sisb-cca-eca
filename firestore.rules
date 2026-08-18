@@ -25,6 +25,56 @@ service cloud.firestore {
         get(/databases/$(database)/documents/activities/$(activityId)).data.category == "Athletics";
     }
 
+    function seatMigrationRunning() {
+      let migration = /databases/$(database)/documents/system/seatCountMigration;
+      return exists(migration) &&
+        get(migration).data.expiresAt is timestamp &&
+        get(migration).data.expiresAt > request.time;
+    }
+
+    function studentHasActivity(studentDoc, activityId) {
+      return studentDoc.data.cca is list &&
+        studentDoc.data.eca is list &&
+        (activityId in studentDoc.data.cca || activityId in studentDoc.data.eca);
+    }
+
+    function seatCountMatchesStudentChange(activityId, delta) {
+      let student = /databases/$(database)/documents/students/$(request.auth.token.email.lower());
+      return exists(student) &&
+        (
+          (
+            delta == 1 &&
+            !studentHasActivity(get(student), activityId) &&
+            studentHasActivity(getAfter(student), activityId)
+          ) ||
+          (
+            delta == -1 &&
+            studentHasActivity(get(student), activityId) &&
+            !studentHasActivity(getAfter(student), activityId)
+          )
+        );
+    }
+
+    function isValidSeatCountUpdate(activityId) {
+      let oldCount = resource.data.seatCount;
+      let newCount = request.resource.data.seatCount;
+      let delta = newCount - oldCount;
+      return isSignedIn() &&
+        !seatMigrationRunning() &&
+        oldCount is int &&
+        newCount is int &&
+        newCount >= 0 &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["seatCount"]) &&
+        seatCountMatchesStudentChange(activityId, delta) &&
+        (
+          delta == -1 ||
+          (
+            delta == 1 &&
+            (resource.data.capacity == 0 || newCount <= resource.data.capacity)
+          )
+        );
+    }
+
     // ------------------------------------------------------------------
     // admins collection: only the Firebase console / Admin SDK may write.
     // To make yourself admin: create a document with ID = your email.
@@ -35,19 +85,21 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------
-    // activities collection: any signed-in user (student or admin) can
-    // read. Only admins can create / edit / delete activities.
+    // activities collection: details and authoritative seat counts live in
+    // one document. Students may move only seatCount by one; all descriptive
+    // fields remain admin-only.
     // ------------------------------------------------------------------
     match /activities/{activityId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isValidSeatCountUpdate(activityId);
     }
 
     // ------------------------------------------------------------------
     // students collection: doc ID = student email (lowercase).
     // PRIVACY: only admins may list the roster; a student may read ONLY
-    // their own document. The app's student view reads the `seats`
-    // collection for "spots left" instead of other students' docs.
+    // their own document. Activity documents include `seatCount`, so students
+    // can see "spots left" without reading other students' docs.
     // - a student may update only their OWN document, only the fields
     //   the app writes, and must keep at least 2 activities in total
     //   whenever they submit/change choices (admins may still clear choices)
@@ -70,6 +122,7 @@ service cloud.firestore {
         (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(["cca", "eca"]) ||
           (
+            !seatMigrationRunning() &&
             request.resource.data.cca is list &&
             request.resource.data.eca is list &&
             request.resource.data.cca.size() + request.resource.data.eca.size() >= 2 &&
@@ -85,26 +138,16 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------
-    // seats collection: quota counters for each activity (doc ID = the
-    // activity's ID, shape { count: number }). The app updates them inside
-    // a Firestore transaction (saveChoices / clearChoices / deleteStudent),
-    // which is what makes the quota rule race-free.
-    //
-    // SECURITY NOTE: these rules allow any signed-in user to adjust a
-    // counter by +/-1, because the rule language can't verify that the
-    // student is actually enrolling in the same transaction. The quota is
-    // therefore enforced for students who use the app (the honest path).
-    // For hard guarantees against a hostile client, move the quota check
-    // to a server-side Cloud Function / Admin SDK.
+    // Legacy seats documents are retained temporarily for rollback. The app
+    // no longer reads or writes them after activity seatCount migration.
     // ------------------------------------------------------------------
     match /seats/{activityId} {
-      allow read: if isSignedIn();
-      allow delete: if isAdmin();
-      allow create: if isAdmin() || (isSignedIn() && request.resource.data.count == 1);
-      allow update: if isSignedIn() && (
-        request.resource.data.count == resource.data.count + 1 ||
-        request.resource.data.count == resource.data.count - 1
-      ) && request.resource.data.count >= 0;
+      allow read, delete: if isAdmin();
+      allow create, update: if false;
+    }
+
+    match /system/{document} {
+      allow read, write: if isAdmin();
     }
   }
 }

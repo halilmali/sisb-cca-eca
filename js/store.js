@@ -9,7 +9,7 @@
 //
 // Firestore layout
 //   activities/{autoId}   { name, type: "CCA"|"ECA", days: ["Mon",...],
-//                           time, venue, capacity, description, createdAt,
+//                           time, venue, capacity, seatCount, description, createdAt,
 //                           genderRestriction?: "F"|"M"|null,
 //                           category?: "Athletics"|"Non-Athletics"|null (ECAs only) }
 //   students/{email}      { email, name, nickname, className, gender: "M"|"F",
@@ -25,8 +25,8 @@ export const MODE = isConfigured ? "firebase" : "demo";
 // Shared reactive state
 // ---------------------------------------------------------------------------
 let activities = [];
+let activitiesLoaded = MODE === "demo";
 let students = []; // firebase mode: full roster — only populated for admins
-let seats = new Map(); // firebase mode: activityId -> latest loaded seat count
 let myStudent = null; // firebase mode: the signed-in user's own doc
 const listeners = new Set();
 
@@ -66,10 +66,9 @@ export function getStudent(email) {
 }
 
 /**
- * Live seat counts per activity (activityId -> number of students in it).
- * In firebase mode this comes from the `seats` collection, which every
- * signed-in user may read — so the student view can show "spots left"
- * without exposing the rest of the roster.
+ * Seat counts per activity (activityId -> number of students in it).
+ * Firebase stores the count on each activity document, so loading activity
+ * details also loads availability without a second collection query.
  */
 export function getSeats() {
   if (MODE === "demo") {
@@ -81,7 +80,14 @@ export function getSeats() {
     }
     return map;
   }
-  return seats;
+  return new Map(activities.map((activity) => [activity.id, activity.seatCount || 0]));
+}
+
+export function areSeatCountsReady() {
+  return MODE === "demo" || (
+    activitiesLoaded &&
+    activities.every((activity) => Number.isInteger(activity.seatCount) && activity.seatCount >= 0)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -222,6 +228,7 @@ function loadDemo() {
     demoDb = demoSeed();
   }
   activities = demoDb.activities;
+  activitiesLoaded = true;
   students = demoDb.students;
 }
 
@@ -259,7 +266,8 @@ export async function configureAccess(role, email) {
   // so a later user never sees (or reads via the console) stale roster data.
   students = [];
   myStudent = null;
-  seats = new Map();
+  activities = [];
+  activitiesLoaded = false;
   for (const unsub of unsubscribes) unsub();
   unsubscribes = [];
   for (const unsub of roleUnsubscribes) unsub();
@@ -310,18 +318,11 @@ export async function configureAccess(role, email) {
     };
   };
 
-  unsubscribes.push(
-    setupListener("activities", (snap) => {
-      activities = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      emit();
-    })
-  );
-
   if (role === "admin") {
-    // Admins need live counters while managing assignments and quotas.
     unsubscribes.push(
-      setupListener("seats", (snap) => {
-        seats = new Map(snap.docs.map((d) => [d.id, d.data().count || 0]));
+      setupListener("activities", (snap) => {
+        activities = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        activitiesLoaded = true;
         emit();
       })
     );
@@ -340,16 +341,17 @@ export async function configureAccess(role, email) {
       )
     );
   } else if (role === "student") {
-    // Students only need an availability snapshot. Quotas are checked again
-    // atomically when they save, so a live collection listener only creates
-    // read fan-out without improving correctness.
+    // Student availability is a snapshot. The save transaction performs the
+    // authoritative quota check, so live activity updates would only recreate
+    // read fan-out when other students take seats.
     try {
-      const snap = await getDocs(collection(db, "seats"));
+      const snap = await getDocs(collection(db, "activities"));
       if (version !== accessVersion) return;
-      seats = new Map(snap.docs.map((d) => [d.id, d.data().count || 0]));
+      activities = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      activitiesLoaded = true;
       emit();
     } catch (err) {
-      console.error("seats load failed:", err);
+      console.error("activities load failed:", err);
     }
     if (version !== accessVersion) return;
 
@@ -396,6 +398,7 @@ export async function addActivity(data) {
   const ref = await addDoc(collection(db, "activities"), {
     createdAt: Date.now(),
     ...data,
+    seatCount: 0,
   });
   return ref.id;
 }
@@ -425,7 +428,7 @@ export async function deleteActivity(id) {
   }
   const { doc, deleteDoc, writeBatch } = await import("firebase/firestore");
   await deleteDoc(doc(db, "activities", id));
-  // Remove the seat counter for this activity (no-op if it never existed)
+  // Remove a legacy counter if this activity predates embedded seat counts.
   await deleteDoc(doc(db, "seats", id));
   // Clean up any student's choices that referenced the deleted activity
   const affected = students.filter(
@@ -478,6 +481,107 @@ export async function addStudent(email, name = "", className = "", nickname = ""
   return true;
 }
 
+const SEAT_MIGRATION_ERROR =
+  "Activity seat counts have not been migrated yet. Ask an administrator to migrate them first.";
+
+function assertSeatCountsReady() {
+  if (!areSeatCountsReady()) throw new Error(SEAT_MIGRATION_ERROR);
+}
+
+async function readActivitySeatChanges(tx, docFn, addedIds = [], removedIds = []) {
+  const deltas = new Map();
+  for (const id of addedIds) deltas.set(id, 1);
+  for (const id of removedIds) deltas.set(id, -1);
+
+  const changes = [];
+  for (const [id, delta] of deltas) {
+    const ref = docFn(db, "activities", id);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) {
+      if (delta > 0) throw new Error("One of the chosen clubs no longer exists.");
+      continue;
+    }
+
+    const activity = snap.data();
+    if (!Number.isInteger(activity.seatCount) || activity.seatCount < 0) {
+      throw new Error(SEAT_MIGRATION_ERROR);
+    }
+    if (delta > 0 && (activity.capacity || 0) > 0 && activity.seatCount >= activity.capacity) {
+      throw new Error(`"${activity.name}" is full — its quota has been reached.`);
+    }
+    changes.push({ ref, seatCount: activity.seatCount, delta });
+  }
+  return changes;
+}
+
+function writeActivitySeatChanges(tx, changes) {
+  for (const { ref, seatCount, delta } of changes) {
+    if (delta < 0 && seatCount === 0) continue;
+    tx.update(ref, { seatCount: Math.max(0, seatCount + delta) });
+  }
+}
+
+/** One-time admin migration that derives activity counts from saved choices. */
+export async function migrateLegacySeatCounts() {
+  if (MODE === "demo") return 0;
+  const { collection, doc, getDocs, runTransaction, Timestamp, writeBatch } =
+    await import("firebase/firestore");
+  const lockRef = doc(db, "system", "seatCountMigration");
+  const owner = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+  const leaseUntil = () => Timestamp.fromMillis(Date.now() + 10 * 60 * 1000);
+  await runTransaction(db, async (tx) => {
+    const lock = await tx.get(lockRef);
+    const expiresAt = lock.exists() ? lock.data().expiresAt : null;
+    if (expiresAt?.toMillis?.() > Date.now()) {
+      throw new Error("Another administrator is already migrating seat counts.");
+    }
+    tx.set(lockRef, {
+      owner,
+      expiresAt: leaseUntil(),
+    });
+  });
+
+  const renewLock = () => runTransaction(db, async (tx) => {
+    const lock = await tx.get(lockRef);
+    if (!lock.exists() || lock.data().owner !== owner) {
+      throw new Error("The seat-count migration lease was lost. Run the migration again.");
+    }
+    tx.update(lockRef, { expiresAt: leaseUntil() });
+  });
+
+  try {
+    const [activitySnap, studentSnap] = await Promise.all([
+      getDocs(collection(db, "activities")),
+      getDocs(collection(db, "students")),
+    ]);
+    const savedCounts = new Map();
+    for (const item of studentSnap.docs) {
+      const student = item.data();
+      for (const id of new Set([...(student.cca || []), ...(student.eca || [])])) {
+        savedCounts.set(id, (savedCounts.get(id) || 0) + 1);
+      }
+    }
+    const activityDocs = activitySnap.docs;
+
+    for (let offset = 0; offset < activityDocs.length; offset += 450) {
+      await renewLock();
+      const batch = writeBatch(db);
+      for (const item of activityDocs.slice(offset, offset + 450)) {
+        batch.update(doc(db, "activities", item.id), {
+          seatCount: savedCounts.get(item.id) || 0,
+        });
+      }
+      await batch.commit();
+    }
+    return activityDocs.length;
+  } finally {
+    await runTransaction(db, async (tx) => {
+      const lock = await tx.get(lockRef);
+      if (lock.exists() && lock.data().owner === owner) tx.delete(lockRef);
+    }).catch((err) => console.error("migration lock cleanup failed:", err));
+  }
+}
+
 /** Remove a student (and release their seats). */
 export async function deleteStudent(email) {
   const key = String(email).toLowerCase();
@@ -486,28 +590,20 @@ export async function deleteStudent(email) {
     saveDemo();
     return;
   }
-  const { doc, deleteDoc, runTransaction } = await import("firebase/firestore");
+  assertSeatCountsReady();
+  const { doc, runTransaction } = await import("firebase/firestore");
   const studentRef = doc(db, "students", key);
   await runTransaction(db, async (tx) => {
     // Phase 1 — ALL reads (Firestore forbids reads after the first write).
     const studentSnap = await tx.get(studentRef);
-    const seatRefs = [];
+    let activityChanges = [];
     if (studentSnap.exists()) {
       const prev = studentSnap.data();
-      const ids = [...(prev.cca || []), ...(prev.eca || [])];
-      for (const actId of ids) {
-        const seatRef = doc(db, "seats", actId);
-        const seatSnap = await tx.get(seatRef);
-        seatRefs.push({
-          seatRef,
-          taken: seatSnap.exists() ? seatSnap.data().count || 0 : 0,
-        });
-      }
+      const ids = new Set([...(prev.cca || []), ...(prev.eca || [])]);
+      activityChanges = await readActivitySeatChanges(tx, doc, [], ids);
     }
     // Phase 2 — ALL writes.
-    for (const { seatRef, taken } of seatRefs) {
-      tx.set(seatRef, { count: Math.max(0, taken - 1) }, { merge: true });
-    }
+    writeActivitySeatChanges(tx, activityChanges);
     tx.delete(studentRef);
   });
 }
@@ -516,9 +612,9 @@ export async function deleteStudent(email) {
  * Save a student's choices.
  *
  * Quota enforcement: each activity has a `capacity` (0 = unlimited). In
- * Firebase mode a Firestore transaction reads the `seats/{activityId}`
- * counter docs and the activity docs, checks the quota for every activity
- * being newly added, and only then writes the student + seat counters — all
+ * Firebase mode a Firestore transaction reads the affected activity docs,
+ * checks their embedded `seatCount`, and only then writes the student and
+ * activity counters — all
  * atomically, so two students can't grab the last spot at the same time.
  * In demo mode the quota is checked against the in-memory roster.
  */
@@ -536,6 +632,7 @@ export async function saveChoices(email, ccaIds, ecaIds) {
     saveDemo();
     return;
   }
+  assertSeatCountsReady();
 
   const { doc, runTransaction } = await import("firebase/firestore");
   const studentRef = doc(db, "students", key);
@@ -550,43 +647,10 @@ export async function saveChoices(email, ccaIds, ecaIds) {
     const added = [...nextIds].filter((id) => !prevIds.has(id));
     const removed = [...prevIds].filter((id) => !nextIds.has(id));
 
-    const addInfo = [];
-    for (const actId of added) {
-      const actSnap = await tx.get(doc(db, "activities", actId));
-      if (!actSnap.exists()) throw new Error("One of the chosen clubs no longer exists.");
-      const act = actSnap.data();
-      const seatRef = doc(db, "seats", actId);
-      const seatSnap = await tx.get(seatRef);
-      addInfo.push({
-        act,
-        seatRef,
-        taken: seatSnap.exists() ? seatSnap.data().count || 0 : 0,
-      });
-    }
-    const removeInfo = [];
-    for (const actId of removed) {
-      const seatRef = doc(db, "seats", actId);
-      const seatSnap = await tx.get(seatRef);
-      removeInfo.push({
-        seatRef,
-        taken: seatSnap.exists() ? seatSnap.data().count || 0 : 0,
-      });
-    }
-
-    // Validate quotas once all reads are done.
-    for (const { act, taken } of addInfo) {
-      if ((act.capacity || 0) > 0 && taken >= act.capacity) {
-        throw new Error(`"${act.name}" is full — its quota has been reached.`);
-      }
-    }
+    const activityChanges = await readActivitySeatChanges(tx, doc, added, removed);
 
     // Phase 2 — ALL writes.
-    for (const { seatRef, taken } of addInfo) {
-      tx.set(seatRef, { count: taken + 1 }, { merge: true });
-    }
-    for (const { seatRef, taken } of removeInfo) {
-      tx.set(seatRef, { count: Math.max(0, taken - 1) }, { merge: true });
-    }
+    writeActivitySeatChanges(tx, activityChanges);
     tx.update(studentRef, {
       cca: ccaIds,
       eca: ecaIds,
@@ -595,15 +659,16 @@ export async function saveChoices(email, ccaIds, ecaIds) {
     return { added, removed };
   });
 
-  // Student clients use a one-time seat snapshot. Keep this client's display
-  // current after its own successful transaction without restoring a live
-  // listener that broadcasts every student's changes to every other student.
-  for (const actId of changes.added) {
-    seats.set(actId, (seats.get(actId) || 0) + 1);
-  }
-  for (const actId of changes.removed) {
-    seats.set(actId, Math.max(0, (seats.get(actId) || 0) - 1));
-  }
+  // Keep this student's one-time activity snapshot current after its save.
+  activities = activities.map((activity) => {
+    if (changes.added.includes(activity.id)) {
+      return { ...activity, seatCount: (activity.seatCount || 0) + 1 };
+    }
+    if (changes.removed.includes(activity.id)) {
+      return { ...activity, seatCount: Math.max(0, (activity.seatCount || 0) - 1) };
+    }
+    return activity;
+  });
   emit();
 }
 
@@ -629,6 +694,7 @@ export async function setStudentChoices(email, ccaIds, ecaIds) {
     saveDemo();
     return;
   }
+  assertSeatCountsReady();
 
   const { doc, runTransaction } = await import("firebase/firestore");
   const studentRef = doc(db, "students", key);
@@ -643,36 +709,10 @@ export async function setStudentChoices(email, ccaIds, ecaIds) {
     const added = [...nextIds].filter((id) => !prevIds.has(id));
     const removed = [...prevIds].filter((id) => !nextIds.has(id));
 
-    const addInfo = [];
-    for (const actId of added) {
-      const actSnap = await tx.get(doc(db, "activities", actId));
-      if (!actSnap.exists()) throw new Error("One of the chosen clubs no longer exists.");
-      const act = actSnap.data();
-      const seatRef = doc(db, "seats", actId);
-      const seatSnap = await tx.get(seatRef);
-      addInfo.push({ act, seatRef, taken: seatSnap.exists() ? seatSnap.data().count || 0 : 0 });
-    }
-    const removeInfo = [];
-    for (const actId of removed) {
-      const seatRef = doc(db, "seats", actId);
-      const seatSnap = await tx.get(seatRef);
-      removeInfo.push({ seatRef, taken: seatSnap.exists() ? seatSnap.data().count || 0 : 0 });
-    }
-
-    // Quota: can't assign a student to a club that is already full.
-    for (const { act, taken } of addInfo) {
-      if ((act.capacity || 0) > 0 && taken >= act.capacity) {
-        throw new Error(`"${act.name}" is full — its quota has been reached.`);
-      }
-    }
+    const activityChanges = await readActivitySeatChanges(tx, doc, added, removed);
 
     // Phase 2 — ALL writes.
-    for (const { seatRef, taken } of addInfo) {
-      tx.set(seatRef, { count: taken + 1 }, { merge: true });
-    }
-    for (const { seatRef, taken } of removeInfo) {
-      tx.set(seatRef, { count: Math.max(0, taken - 1) }, { merge: true });
-    }
+    writeActivitySeatChanges(tx, activityChanges);
     tx.update(studentRef, {
       cca: ccaIds,
       eca: ecaIds,
@@ -694,6 +734,7 @@ export async function clearChoices(email) {
     saveDemo();
     return;
   }
+  assertSeatCountsReady();
   const { doc, runTransaction } = await import("firebase/firestore");
   const studentRef = doc(db, "students", key);
   await runTransaction(db, async (tx) => {
@@ -701,20 +742,10 @@ export async function clearChoices(email) {
     const studentSnap = await tx.get(studentRef);
     if (!studentSnap.exists()) return;
     const prev = studentSnap.data();
-    const ids = [...(prev.cca || []), ...(prev.eca || [])];
-    const seatRefs = [];
-    for (const actId of ids) {
-      const seatRef = doc(db, "seats", actId);
-      const seatSnap = await tx.get(seatRef);
-      seatRefs.push({
-        seatRef,
-        taken: seatSnap.exists() ? seatSnap.data().count || 0 : 0,
-      });
-    }
+    const ids = new Set([...(prev.cca || []), ...(prev.eca || [])]);
+    const activityChanges = await readActivitySeatChanges(tx, doc, [], ids);
     // Phase 2 — ALL writes.
-    for (const { seatRef, taken } of seatRefs) {
-      tx.set(seatRef, { count: Math.max(0, taken - 1) }, { merge: true });
-    }
+    writeActivitySeatChanges(tx, activityChanges);
     tx.update(studentRef, { cca: [], eca: [], submittedAt: null });
   });
 }
