@@ -18,7 +18,7 @@
 ## Current feature set (all working)
 
 - **Admins** (Google sign-in; `admins/{lowercase-email}` doc = admin):
-  manage activities (CCA/ECA, days, time, venue, quota, description, ECA
+  manage activities (CCA/ECA, days, time, venue, quota, ECA
   category), **bulk-upload activities from CSV**, manage students (add by
   email/bulk, view choices, **edit choices**, reset, delete).
 - **Students**: pick **at least 2 activities in any mix** (max 2 ECAs);

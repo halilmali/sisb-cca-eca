@@ -565,13 +565,6 @@ button {
   font-size: 1.15rem;
 }
 
-.act-card__desc {
-  color: var(--ink-2);
-  font-size: 0.88rem;
-  margin: 4px 0 2px;
-  flex-grow: 1;
-}
-
 .act-card__meta {
   display: grid;
   gap: 6px;

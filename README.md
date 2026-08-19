@@ -83,7 +83,7 @@ and pulls their display name from Google automatically.
 
 | Collection  | Document ID        | Shape                                                                    |
 | ----------- | ------------------ | ------------------------------------------------------------------------ |
-| `activities`| auto               | `{ name, type: "CCA"\|"ECA", days: ["Monday",...] (short names like "Mon" also accepted and normalized), time, venue, capacity (quota), seatCount, description, category: "Athletics"\|"Non-Athletics"\|null (ECAs only) }` |
+| `activities`| auto               | `{ name, type: "CCA"\|"ECA", days: ["Monday",...] (short names like "Mon" also accepted and normalized), time, venue, capacity (quota), seatCount, category: "Athletics"\|"Non-Athletics"\|null (ECAs only) }` |
 | `students`  | student email      | `{ email, name, className, cca: [actId...], eca: [actId...], submittedAt }` |
 | `admins`    | admin email        | `{ addedAt }` — presence means admin                                     |
 
@@ -120,7 +120,7 @@ Athletics activity — enforced live in the student picker, in `saveChoices` /
 
 Admins can add many activities at once from the Activities panel (**Bulk
 upload**): download the CSV template, fill it in (or load a file), and paste it
-back. Columns: `name, type, days, time, venue, capacity, description, category,
+back. Columns: `name, type, days, time, venue, capacity, category,
 gender`. Every row adds a new activity; rows with duplicate names or invalid
 fields are skipped and reported.
 

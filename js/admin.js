@@ -219,7 +219,6 @@ function renderActivityGrid(activities) {
           </div>
         </div>
         <h3>${esc(a.name)}</h3>
-        <p class="act-card__desc">${esc(a.description || "No description yet.")}</p>
         <div class="day-chips">${dayChips(a.days)}</div>
         <dl class="act-card__meta">
           <div><dt>Time</dt><dd>${esc(a.time || "—")}</dd></div>
@@ -277,10 +276,6 @@ function openActivityModal(activity = null) {
           <button type="button" class="seg__opt ${a.genderRestriction === "F" ? "is-on" : ""}" data-gender="F">Girls only (F)</button>
           <button type="button" class="seg__opt ${a.genderRestriction === "M" ? "is-on" : ""}" data-gender="M">Boys only (M)</button>
         </div>
-      </label>
-      <label class="field">
-        <span>Description <em class="muted">(optional)</em></span>
-        <textarea name="description" rows="2" maxlength="200" placeholder="Short blurb for students">${esc(a.description || "")}</textarea>
       </label>
     </form>
   `;
@@ -343,7 +338,6 @@ function openActivityModal(activity = null) {
           venue: fd.get("venue").trim(),
           capacity: numOrZero(fd.get("capacity")),
           genderRestriction: genderRestriction || null,
-          description: fd.get("description").trim(),
           category: type === "ECA" ? category : null,
         };
         try {
@@ -369,8 +363,8 @@ function openBulkActivitiesModal() {
       <label class="btn btn--ghost btn--sm" style="cursor:pointer;">📄 Load from file<input type="file" id="bulk-file" accept=".csv,.txt,text/csv" hidden></label>
     </div>
     <div class="field">
-      <span>Spreadsheet paste — columns: name, type (CCA/ECA), days ("Mon,Wed"), time, venue, capacity (0 = unlimited), description (optional), category (Athletics/Non-Athletics — ECAs only), gender (blank/F/M)</span>
-      <textarea name="bulk" id="bulk-activities" rows="10" placeholder="Basketball,CCA,&quot;Mon,Wed&quot;,3:00 PM – 4:30 PM,Main Gym,20,Shoot hoops and build teamwork,,&#10;Track &amp; Field,ECA,&quot;Tue,Thu&quot;,3:00 PM – 4:30 PM,Stadium,30,Run fast — all levels welcome,Athletics,"></textarea>
+      <span>Spreadsheet paste — columns: name, type (CCA/ECA), days ("Mon,Wed"), time, venue, capacity (0 = unlimited), category (Athletics/Non-Athletics — ECAs only), gender (blank/F/M)</span>
+      <textarea name="bulk" id="bulk-activities" rows="10" placeholder="Basketball,CCA,&quot;Mon,Wed&quot;,3:00 PM – 4:30 PM,Main Gym,20,,&#10;Track &amp; Field,ECA,&quot;Tue,Thu&quot;,3:00 PM – 4:30 PM,Stadium,30,Athletics,"></textarea>
     </div>
     <p class="field__note">Every row adds a new activity. Rows with a name that already exists, or a missing/invalid required field, are skipped and reported.</p>
   `;
@@ -445,10 +439,10 @@ function openBulkActivitiesModal() {
 /** Build a template CSV and download it. */
 function downloadActivityTemplate() {
   const rows = [
-    "name,type,days,time,venue,capacity,description,category,gender",
-    'Basketball,CCA,"Mon,Wed",3:00 PM – 4:30 PM,Main Gym,20,Shoot hoops and build teamwork,,',
-    'Track & Field,ECA,"Tue,Thu",3:00 PM – 4:30 PM,Stadium,30,Run fast — all levels welcome,Athletics,',
-    'Chess Club,ECA,Tue,3:00 PM – 4:00 PM,Library,20,From pawn to grandmaster,Non-Athletics,',
+    "name,type,days,time,venue,capacity,category,gender",
+    'Basketball,CCA,"Mon,Wed",3:00 PM – 4:30 PM,Main Gym,20,,',
+    'Track & Field,ECA,"Tue,Thu",3:00 PM – 4:30 PM,Stadium,30,Athletics,',
+    'Chess Club,ECA,Tue,3:00 PM – 4:00 PM,Library,20,Non-Athletics,',
   ];
   const blob = new Blob(["\ufeff" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -506,7 +500,7 @@ function parseCsvLine(line) {
 
 /** Turn one CSV row into an activity payload, or { error } explaining why not. */
 function parseActivityRow(row) {
-  const [name, type, days, time, venue, capacity, description, category, gender] = row;
+  const [name, type, days, time, venue, capacity, category, gender] = row;
   const fail = (msg) => ({ error: msg });
   if (!name) return fail("row with no name");
   const t = (type || "CCA").trim().toUpperCase();
@@ -528,7 +522,6 @@ function parseActivityRow(row) {
       time: (time || "").trim(),
       venue: (venue || "").trim(),
       capacity: cap,
-      description: (description || "").trim(),
       category: t === "ECA" ? (cat === "athletics" ? "Athletics" : "Non-Athletics") : null,
       genderRestriction: g === "F" || g === "M" ? g : null,
     },

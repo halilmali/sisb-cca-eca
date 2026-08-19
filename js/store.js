@@ -9,7 +9,7 @@
 //
 // Firestore layout
 //   activities/{autoId}   { name, type: "CCA"|"ECA", days: ["Mon",...],
-//                           time, venue, capacity, seatCount, description, createdAt,
+//                           time, venue, capacity, seatCount, createdAt,
 //                           genderRestriction?: "F"|"M"|null,
 //                           category?: "Athletics"|"Non-Athletics"|null (ECAs only) }
 //   students/{email}      { email, name, nickname, className, gender: "M"|"F",
@@ -103,7 +103,6 @@ const DEMO_ACTIVITIES = [
     time: "3:00 PM – 4:30 PM",
     venue: "Main Gym",
     capacity: 20,
-    description: "Shoot hoops, build teamwork, stay fit.",
     genderRestriction: null,
   },
   {
@@ -113,7 +112,6 @@ const DEMO_ACTIVITIES = [
     time: "3:30 PM – 5:00 PM",
     venue: "Maker Lab",
     capacity: 16,
-    description: "Build and program your own robot.",
     genderRestriction: null,
   },
   {
@@ -123,7 +121,6 @@ const DEMO_ACTIVITIES = [
     time: "4:00 PM – 5:30 PM",
     venue: "Room 204",
     capacity: 24,
-    description: "Argue with style. Win with evidence.",
     genderRestriction: null,
   },
   {
@@ -133,7 +130,6 @@ const DEMO_ACTIVITIES = [
     time: "3:30 PM – 5:00 PM",
     venue: "Sports Hall",
     capacity: 18,
-    description: "Netball for girls only. Build teamwork and fitness.",
     genderRestriction: "F",
   },
   {
@@ -143,7 +139,6 @@ const DEMO_ACTIVITIES = [
     time: "3:00 PM – 4:00 PM",
     venue: "Library",
     capacity: 20,
-    description: "From pawn to grandmaster.",
     genderRestriction: null,
     category: "Non-Athletics",
   },
@@ -154,7 +149,6 @@ const DEMO_ACTIVITIES = [
     time: "3:00 PM – 5:00 PM",
     venue: "Art Room",
     capacity: 18,
-    description: "Painting, sketching, and sculpture.",
     genderRestriction: null,
     category: "Non-Athletics",
   },
@@ -165,7 +159,6 @@ const DEMO_ACTIVITIES = [
     time: "3:00 PM – 4:30 PM",
     venue: "Computer Lab",
     capacity: 15,
-    description: "Learn to build things with code.",
     genderRestriction: null,
     category: "Non-Athletics",
   },
@@ -176,7 +169,6 @@ const DEMO_ACTIVITIES = [
     time: "3:00 PM – 4:30 PM",
     venue: "Stadium",
     capacity: 30,
-    description: "Sprint, jump, throw — all levels welcome.",
     genderRestriction: null,
     category: "Athletics",
   },
