@@ -61,30 +61,12 @@ function renderLogin() {
           <span class="brand__mark" aria-hidden="true"></span>
           <span class="brand__name">ClubBoard</span>
         </div>
-        <h1>Pick your club.<br />Own your week.</h1>
-        <p class="login__lede">
-          Choose at least two clubs for the new term — any mix of CCAs and
-          ECAs, no two clubs on the same day, guaranteed.
-        </p>
+        <h1>Pick your CCA/ECA<br />Plan your week</h1>
         <ul class="login__points">
-          <li><span class="tick"></span>At least two activities, any mix</li>
-          <li><span class="tick"></span>Automatic day-clash protection</li>
-          <li><span class="tick"></span>Managed by your school admin</li>
+          <li><span class="tick"></span>Your account is created already</li>
+          <li><span class="tick"></span>Sign in with your school email</li>
+          <li><span class="tick"></span>Choose at least 2 activities</li>
         </ul>
-        <div class="login__sample">
-          <span class="login__sample-label">How it looks</span>
-          <div class="sample-card">
-            <span class="type-badge type-badge--cca">CCA</span>
-            <strong>Basketball</strong>
-            <div class="sample-days"><span class="day-chip day-chip--on">Monday</span><span class="day-chip day-chip--on">Wednesday</span></div>
-          </div>
-          <div class="sample-card">
-            <span class="type-badge type-badge--eca">ECA</span>
-            <strong>Chess Club</strong>
-            <div class="sample-days"><span class="day-chip day-chip--on">Tuesday</span></div>
-          </div>
-          <p class="sample-ok">✓ No day overlap — both fit in your week.</p>
-        </div>
       </section>
       <section class="login__panel">
         <div class="login__card">
@@ -92,7 +74,7 @@ function renderLogin() {
           <p class="login__hint">
             ${
               MODE === "firebase"
-                ? "Use the Google account your school gave you."
+                ? "Sign in with your school email."
                 : "Demo mode is on — no Firebase connected yet. Try it with a demo account."
             }
           </p>
