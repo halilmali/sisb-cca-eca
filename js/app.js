@@ -3,12 +3,18 @@
 // ============================================================================
 import { MODE, initStore, subscribe as subscribeStore, getRole, updateStudentName, configureAccess } from "./store.js";
 import * as auth from "./auth.js";
+import {
+  isStudentWindowOpen,
+  STUDENT_WINDOW_START_MS,
+  STUDENT_WINDOW_END_MS,
+} from "./access.js";
 import { $, esc } from "./ui.js";
 import { mountAdminView } from "./admin.js";
 import { mountStudentView } from "./student.js";
 
 let currentUser = null;
 let currentRole = null; // "admin" | "student" | "none"
+let currentWindowState = null; // "open" | "closed" | non-student placeholder
 
 async function boot() {
   await initStore();
@@ -39,12 +45,31 @@ async function boot() {
 
   await auth.initAuth();
   render();
+
+  // Flip the student view when the access window opens or closes. The window
+  // is a short fixed slot, so a lightweight poll is enough; within ~10s of a
+  // boundary the correct view (picker vs "closed") renders. Admins are never
+  // affected. The store-level guard in saveChoices is the hard boundary.
+  setInterval(() => {
+    if (currentRole !== "student") return;
+    const open = isStudentWindowOpen();
+    const state = open ? "open" : "closed";
+    if (state !== currentWindowState) render();
+  }, 10000);
 }
 
 function render() {
   if (!currentUser) return renderLogin();
-  if (currentRole === "admin") return mountAdminView();
-  if (currentRole === "student") return mountStudentView();
+  if (currentRole === "admin") {
+    currentWindowState = "admin";
+    return mountAdminView();
+  }
+  if (currentRole === "student") {
+    const open = isStudentWindowOpen();
+    currentWindowState = open ? "open" : "closed";
+    return open ? mountStudentView() : renderClosed();
+  }
+  currentWindowState = "none";
   return renderNotRegistered();
 }
 
@@ -147,6 +172,60 @@ function renderNotRegistered() {
       </div>
     </div>
   `;
+  $("#btn-signout").addEventListener("click", () => auth.logout());
+}
+
+// ---------------------------------------------------------------------------
+// Student window closed screen
+// ---------------------------------------------------------------------------
+// Shown to students when the registration window is not open. It covers both
+// cases -- before the window opens (with a live countdown) and after it ends.
+// Admins never see this; render() routes only the student role here.
+function renderClosed() {
+  const app = $("#app");
+  const opensAt = STUDENT_WINDOW_START_MS;
+  const closesAt = STUDENT_WINDOW_END_MS;
+
+  app.innerHTML = `
+    <div class="unauth">
+      <div class="brand">
+        <span class="brand__mark" aria-hidden="true"></span>
+        <span class="brand__name">ClubBoard</span>
+      </div>
+      <div class="unauth__card">
+        <div class="unauth__icon" aria-hidden="true">🕒</div>
+        <h1>Registration is closed right now</h1>
+        <p>
+          Club choice is available to students only from
+          <strong>10:20 to 10:30</strong> (Bangkok time) on
+          <strong>August 24</strong>.
+        </p>
+        <p class="unauth__timer" id="closed-countdown"></p>
+        <button class="btn btn--outline" id="btn-signout">Sign out</button>
+      </div>
+    </div>
+  `;
+
+  const update = () => {
+    const el = document.getElementById("closed-countdown");
+    if (!el) return;
+    const nowMs = Date.now();
+    if (nowMs >= closesAt) {
+      el.textContent = "This registration window has closed.";
+      return;
+    }
+    if (nowMs < opensAt) {
+      const diff = opensAt - nowMs;
+      const m = Math.floor(diff / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      el.textContent = `Opens in ${m}m ${s}s`;
+    } else {
+      el.textContent = "Registration is open now — refresh to begin.";
+    }
+  };
+  update();
+  setInterval(update, 1000);
+
   $("#btn-signout").addEventListener("click", () => auth.logout());
 }
 

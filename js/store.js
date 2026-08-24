@@ -18,6 +18,7 @@
 // ============================================================================
 import { isConfigured } from "./config.js";
 import { normDays } from "./ui.js";
+import { isStudentWindowOpen } from "./access.js";
 
 export const MODE = isConfigured ? "firebase" : "demo";
 
@@ -612,6 +613,13 @@ export async function deleteStudent(email) {
  */
 export async function saveChoices(email, ccaIds, ecaIds) {
   const key = String(email).toLowerCase();
+  // Hard boundary for the student registration window: saves outside the
+  // window are refused even if the UI is bypassed (e.g. via the console).
+  if (!isStudentWindowOpen()) {
+    throw new Error(
+      "Club choice is currently closed. It is open to students from 10:20 to 10:30 (Bangkok time) on August 24."
+    );
+  }
   assertChoiceLimits(ccaIds, ecaIds);
   assertEcaAthleticsRule(ecaIds);
   if (MODE === "demo") {

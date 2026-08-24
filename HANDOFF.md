@@ -8,7 +8,8 @@
 - Vanilla HTML/CSS/JS web app (no build step) + Firebase (Auth + Firestore).
 - Single page shell: `index.html` → `js/app.js` (boot + routing) → `js/admin.js`
   (admin dashboard), `js/student.js` (student picker), `js/store.js` (data layer),
-  `js/ui.js` (modals/toasts/helpers), `js/auth.js`, `js/firebase-init.js`,
+  `js/ui.js` (modals/toasts/helpers), `js/access.js` (student access window),
+  `js/auth.js`, `js/firebase-init.js`,
   `js/config.js` (🔧 Firebase config), `css/styles.css`, `firestore.rules`.
 - GitHub (public): https://github.com/halilmali/sisb-cca-eca — branch `main`.
 - Local dev: `npm start` serves the folder on port 3000 (`npx serve . -l 3000`).
@@ -24,7 +25,10 @@
 - **Students**: pick **at least 2 activities in any mix** (max 2 ECAs);
   day-clash protection; **Athletics rule** (2 ECAs must include one Athletics
   ECA); quota "full" states; spots-left display; picker lists activities
-  **by day**; save.
+  **by day**; save. **Timed access**: the student picker (and `saveChoices`)
+  is gated to **Aug 24, 10:20 – 10:30 (Bangkok time)** — before/after, students
+  see a "registration closed" countdown screen (admins are never gated).
+  Config: `js/access.js`.
 - **Quotas**: `capacity` and `seatCount` live on each activity (0 capacity =
   unlimited). Enforced in the UI and **atomically** in a Firestore transaction.
   `setStudentChoices` (admin edit) keeps counters in sync and
