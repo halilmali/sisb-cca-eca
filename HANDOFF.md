@@ -26,7 +26,7 @@
   day-clash protection; **Athletics rule** (2 ECAs must include one Athletics
   ECA); quota "full" states; spots-left display; picker lists activities
   **by day**; save. **Timed access**: the student picker (and `saveChoices`)
-  is gated to **Aug 24, 10:20 – 10:30 (Bangkok time)** — before/after, students
+  is gated to **Aug 26, 2:30 PM – Aug 28, 6:00 PM (Bangkok time)** — before/after, students
   see a "registration closed" countdown screen (admins are never gated).
   Config: `js/access.js`.
 - **Quotas**: `capacity` and `seatCount` live on each activity (0 capacity =

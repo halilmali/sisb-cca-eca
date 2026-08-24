@@ -18,7 +18,7 @@
 // ============================================================================
 import { isConfigured } from "./config.js";
 import { normDays } from "./ui.js";
-import { isStudentWindowOpen } from "./access.js";
+import { isStudentWindowOpen, STUDENT_WINDOW_LABEL } from "./access.js";
 
 export const MODE = isConfigured ? "firebase" : "demo";
 
@@ -617,7 +617,7 @@ export async function saveChoices(email, ccaIds, ecaIds) {
   // window are refused even if the UI is bypassed (e.g. via the console).
   if (!isStudentWindowOpen()) {
     throw new Error(
-      "Club choice is currently closed. It is open to students from 10:20 to 10:30 (Bangkok time) on August 24."
+      `Club choice is currently closed. It is open to students only during ${STUDENT_WINDOW_LABEL}.`
     );
   }
   assertChoiceLimits(ccaIds, ecaIds);

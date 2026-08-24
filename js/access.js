@@ -13,12 +13,17 @@
 // Bangkok is 7 hours ahead of UTC, year-round.
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 
-// The student access window: August 24, 10:20 → 10:30 Bangkok time.
-//   10:20 Bangkok  == 03:20 UTC (Aug 24)   (inclusive)
-//   10:30 Bangkok  == 03:30 UTC (Aug 24)   (exclusive — access ends exactly here)
+// The student access window: Wednesday Aug 26 14:30 → Friday Aug 28 18:00
+// Bangkok time.
+//   Wed 26 Aug 14:30 BKK  == 07:30 UTC (inclusive)
+//   Fri 28 Aug 18:00 BKK  == 11:00 UTC (exclusive — access ends exactly here)
 // Note: `Date.UTC` uses 0-based months, so "7" is August.
-export const STUDENT_WINDOW_START_MS = Date.UTC(2026, 7, 24, 3, 20, 0);
-export const STUDENT_WINDOW_END_MS = Date.UTC(2026, 7, 24, 3, 30, 0);
+export const STUDENT_WINDOW_START_MS = Date.UTC(2026, 7, 26, 7, 30, 0);
+export const STUDENT_WINDOW_END_MS = Date.UTC(2026, 7, 28, 11, 0, 0);
+
+/** Human-readable summary used in the closed screen and save-error message. */
+export const STUDENT_WINDOW_LABEL =
+  "Wednesday, August 26, 2:30 PM → Friday, August 28, 6:00 PM (Bangkok time)";
 
 /** True while the student window is open (start inclusive, end exclusive). */
 export function isStudentWindowOpen(now = Date.now()) {

@@ -7,6 +7,7 @@ import {
   isStudentWindowOpen,
   STUDENT_WINDOW_START_MS,
   STUDENT_WINDOW_END_MS,
+  STUDENT_WINDOW_LABEL,
 } from "./access.js";
 import { $, esc } from "./ui.js";
 import { mountAdminView } from "./admin.js";
@@ -196,9 +197,8 @@ function renderClosed() {
         <div class="unauth__icon" aria-hidden="true">🕒</div>
         <h1>Registration is closed right now</h1>
         <p>
-          Club choice is available to students only from
-          <strong>10:20 to 10:30</strong> (Bangkok time) on
-          <strong>August 24</strong>.
+          Club choice is available to students only during
+          <strong>${STUDENT_WINDOW_LABEL}</strong>.
         </p>
         <p class="unauth__timer" id="closed-countdown"></p>
         <button class="btn btn--outline" id="btn-signout">Sign out</button>
@@ -216,9 +216,14 @@ function renderClosed() {
     }
     if (nowMs < opensAt) {
       const diff = opensAt - nowMs;
-      const m = Math.floor(diff / 60000);
+      const pad = (n) => String(n).padStart(2, "0");
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
-      el.textContent = `Opens in ${m}m ${s}s`;
+      if (d > 0) el.textContent = `Opens in ${d}d ${pad(h)}h ${pad(m)}m ${pad(s)}s`;
+      else if (h > 0) el.textContent = `Opens in ${pad(h)}h ${pad(m)}m ${pad(s)}s`;
+      else el.textContent = `Opens in ${pad(m)}m ${pad(s)}s`;
     } else {
       el.textContent = "Registration is open now — refresh to begin.";
     }
