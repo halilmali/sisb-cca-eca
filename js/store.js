@@ -491,7 +491,7 @@ async function readActivitySeatChanges(tx, docFn, addedIds = [], removedIds = []
     const ref = docFn(db, "activities", id);
     const snap = await tx.get(ref);
     if (!snap.exists()) {
-      if (delta > 0) throw new Error("One of the chosen clubs no longer exists.");
+      if (delta > 0) throw new Error("One of the chosen CCA/ECA no longer exists.");
       continue;
     }
 
@@ -617,14 +617,14 @@ export async function saveChoices(email, ccaIds, ecaIds) {
   // window are refused even if the UI is bypassed (e.g. via the console).
   if (!isStudentWindowOpen()) {
     throw new Error(
-      `Club choice is currently closed. It is open to students only during ${STUDENT_WINDOW_LABEL}.`
+      `CCA/ECA choice is currently closed. It is open to students only during ${STUDENT_WINDOW_LABEL}.`
     );
   }
   assertChoiceLimits(ccaIds, ecaIds);
   assertEcaAthleticsRule(ecaIds);
   if (MODE === "demo") {
     const s = demoDb.students.find((x) => x.email === key);
-    if (!s) throw new Error("You're not on the club list yet.");
+    if (!s) throw new Error("You're not on the CCA/ECA list yet.");
     assertQuotaFree(ccaIds, ecaIds, key);
     s.cca = ccaIds;
     s.eca = ecaIds;
@@ -640,7 +640,7 @@ export async function saveChoices(email, ccaIds, ecaIds) {
   const changes = await runTransaction(db, async (tx) => {
     // Phase 1 — ALL reads (Firestore forbids reads after the first write).
     const studentSnap = await tx.get(studentRef);
-    if (!studentSnap.exists()) throw new Error("You're not on the club list yet.");
+    if (!studentSnap.exists()) throw new Error("You're not on the CCA/ECA list yet.");
     const prev = studentSnap.data();
     const prevIds = new Set([...(prev.cca || []), ...(prev.eca || [])]);
     const nextIds = new Set([...ccaIds, ...ecaIds]);

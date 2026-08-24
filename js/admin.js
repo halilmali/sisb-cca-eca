@@ -60,7 +60,7 @@ export function mountAdminView() {
     <main class="shell">
       <section class="admin-head">
         <div>
-          <h1>Club management</h1>
+          <h1>CCA/ECA management</h1>
           <p>Add activities and register students. Students pick their CCA &amp; ECA here.</p>
         </div>
         <div class="stat-row">
@@ -601,7 +601,7 @@ function renderStudents(students, activities) {
       <div class="empty">
         <div class="empty__icon" aria-hidden="true">🧑‍🎓</div>
         <h3>${students.length ? "No matches" : "No students yet"}</h3>
-        <p>${students.length ? "Try a different search." : "Add students by email so they can sign in and pick their clubs."}</p>
+        <p>${students.length ? "Try a different search." : "Add students by email so they can sign in and pick their CCA/ECA."}</p>
         ${students.length ? "" : '<button class="btn btn--primary" id="empty-add-student">+ Add students</button>'}
       </div>` : ""}
   `;
@@ -860,7 +860,7 @@ function openEditChoicesModal(email) {
 
   const bodyHtml = `
     <p class="modal__message">
-      <strong>${esc(s.email)}</strong>${s.className ? ` · Class ${esc(s.className)}` : ""} — set the clubs this student should have (at least 2 activities in any mix; up to 2 ECAs, one of them Athletics if 2; use Reset to clear all choices).
+      <strong>${esc(s.email)}</strong>${s.className ? ` · Class ${esc(s.className)}` : ""} — set the CCA/ECA this student should have (at least 2 activities in any mix; up to 2 ECAs, one of them Athletics if 2; use Reset to clear all choices).
     </p>
     <div class="modal__section">
       <h4>CCA <span class="muted" id="edit-cca-count">${selectedCca.size} chosen</span></h4>
@@ -967,7 +967,7 @@ async function viewStudent(email) {
       ${(s.cca || []).length || (s.eca || []).length ? `
         <div class="modal__section"><h4>CCA</h4>${(s.cca || []).map((id) => line(id, "CCA")).join("") || '<p class="muted">None chosen</p>'}</div>
         <div class="modal__section"><h4>ECA</h4>${(s.eca || []).map((id) => line(id, "ECA")).join("") || '<p class="muted">None chosen</p>'}</div>
-      ` : '<p class="muted">This student hasn\'t picked any clubs yet.</p>'}
+      ` : '<p class="muted">This student hasn\'t picked any CCA/ECA yet.</p>'}
     `,
     actions: [{ label: "Close", variant: "primary" }],
   });

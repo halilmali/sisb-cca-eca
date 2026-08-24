@@ -195,7 +195,7 @@ export function weekStrip(activityDays) {
   // activityDays: array of day names chosen (flattened from selections)
   const chosen = new Set(normDays(activityDays));
   return `
-    <div class="week-strip" role="img" aria-label="Days your clubs meet">
+    <div class="week-strip" role="img" aria-label="Days your CCA/ECA meet">
       ${DAYS.map(
         (d) =>
           `<span class="week-strip__day ${chosen.has(d) ? "is-on" : ""}">${

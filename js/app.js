@@ -167,7 +167,7 @@ function renderNotRegistered() {
         <h1>You're not on the list yet</h1>
         <p>
           Your account <strong>${esc(currentUser.email)}</strong> isn't registered
-          for club choice. Ask your school admin to add you — it takes them a minute.
+          for CCA/ECA choice. Ask your school admin to add you — it takes them a minute.
         </p>
         <button class="btn btn--outline" id="btn-signout">Sign out</button>
       </div>
@@ -197,7 +197,7 @@ function renderClosed() {
         <div class="unauth__icon" aria-hidden="true">🕒</div>
         <h1>Registration is closed right now</h1>
         <p>
-          Club choice is available to students only during
+          CCA/ECA choice is available to students only during
           <strong>${STUDENT_WINDOW_LABEL}</strong>.
         </p>
         <p class="unauth__timer" id="closed-countdown"></p>

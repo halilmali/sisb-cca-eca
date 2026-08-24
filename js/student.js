@@ -61,7 +61,7 @@ export function mountStudentView() {
     <main class="shell student-shell">
       <section class="student-head">
         <div>
-          <h1>Pick your clubs${me?.name ? `, ${esc(me.name.split(" ")[0])}` : ""} 🎒</h1>
+          <h1>Pick your CCA/ECA${me?.name ? `, ${esc(me.name.split(" ")[0])}` : ""} 🎒</h1>
           <p>
             Choose <b>at least 2 activities</b> — any mix of CCAs and ECAs,
             with up to 2 ECAs. You can't pick a CCA and an ECA that run on the
@@ -79,7 +79,7 @@ export function mountStudentView() {
           <span class="week-card__legend"><i class="dot dot--cca"></i>CCA <i class="dot dot--eca"></i>ECA</span>
         </div>
         <div id="week-strip"></div>
-        <p class="week-card__note" id="week-note">Select clubs below to preview your week.</p>
+        <p class="week-card__note" id="week-note">Select CCA/ECA below to preview your week.</p>
       </section>
 
       <div id="validation-banner"></div>
@@ -187,7 +187,7 @@ export function mountStudentView() {
           <div class="alert alert--danger" role="alert">
             <strong>Day clash!</strong>
             ${esc(clashNames)} run on the same day${clashDays.length > 1 ? "s" : ""}
-            (<b>${esc(clashDays.join(", "))}</b>). Pick a different club for one of them.
+            (<b>${esc(clashDays.join(", "))}</b>). Pick a different CCA/ECA for one of them.
           </div>`;
       } else if (full.length) {
         banner.innerHTML = `
@@ -196,7 +196,7 @@ export function mountStudentView() {
           </div>`;
       } else if (ccaCount + ecaCount >= 2) {
         banner.innerHTML = `
-          <div class="alert alert--ok" role="status">✓ Looks good — your clubs don't clash.</div>`;
+          <div class="alert alert--ok" role="status">✓ Looks good — your CCA/ECA don't clash.</div>`;
       } else {
         banner.innerHTML = "";
       }
