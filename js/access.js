@@ -18,7 +18,7 @@ const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 //   Wed 26 Aug 14:30 BKK  == 07:30 UTC (inclusive)
 //   Fri 28 Aug 18:00 BKK  == 11:00 UTC (exclusive — access ends exactly here)
 // Note: `Date.UTC` uses 0-based months, so "7" is August.
-export const STUDENT_WINDOW_START_MS = Date.UTC(2026, 7, 23, 7, 30, 0);
+export const STUDENT_WINDOW_START_MS = Date.UTC(2026, 7, 26, 7, 30, 0);
 export const STUDENT_WINDOW_END_MS = Date.UTC(2026, 7, 28, 11, 0, 0);
 
 /** Human-readable summary used in the closed screen and save-error message. */
