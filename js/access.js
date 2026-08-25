@@ -23,7 +23,7 @@ export const STUDENT_WINDOW_END_MS = Date.UTC(2026, 7, 28, 11, 0, 0);
 
 /** Human-readable summary used in the closed screen and save-error message. */
 export const STUDENT_WINDOW_LABEL =
-  "Wednesday, August 26, 2:30 PM → Friday, August 28, 6:00 PM (Bangkok time)";
+  "Wednesday, August 26, 6:00 PM → Friday, August 28, 6:00 PM (Bangkok time)";
 
 /** True while the student window is open (start inclusive, end exclusive). */
 export function isStudentWindowOpen(now = Date.now()) {
